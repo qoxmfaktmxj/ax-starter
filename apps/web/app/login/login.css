@@ -67,6 +67,26 @@
   color: var(--color-login-slogan-share);
 }
 
+.loginSloganChallenge,
+.loginSloganShare {
+  transition:
+    opacity 600ms ease,
+    transform 600ms ease;
+}
+
+/* 장면이 살아 있으면 등장이 끝날 때 Challenge, 로그인 성공 때 Share를 보인다. */
+.loginPage:has(canvas[data-preview="true"]) .loginSloganChallenge,
+.loginPage:has(canvas[data-preview="true"]) .loginSloganShare {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.loginPage:has(canvas[data-intro="complete"]) .loginSloganChallenge,
+.loginPage[data-shared="true"]:has(canvas) .loginSloganShare {
+  opacity: 1;
+  transform: none;
+}
+
 .loginPanel {
   width: 100%;
   padding: clamp(24px, 3vw, 36px);

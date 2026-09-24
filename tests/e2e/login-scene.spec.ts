@@ -31,7 +31,8 @@ test("the form works while scene textures are still loading", async ({
     await page.getByLabel("아이디").fill("hr-admin");
     await page.getByLabel("비밀번호").fill(fixturePassword());
     await page.getByRole("button", { name: "로그인", exact: true }).click();
-    await page.waitForURL("**/employees");
+    // 텍스처가 막혀 있으면 load 이벤트가 끝나지 않으므로 domcontentloaded까지만 기다린다.
+    await page.waitForURL("**/employees", { waitUntil: "domcontentloaded" });
   } finally {
     release();
     await page.unrouteAll({ behavior: "ignoreErrors" });
@@ -92,4 +93,113 @@ test("the ISU scene finishes its entrance when WebGL is available", async ({
     timeout: 90_000,
   });
   await expect(canvas(page)).toHaveAttribute("data-preview", "true");
+});
+
+const opacity = (page: Page, selector: string) =>
+  page
+    .locator(selector)
+    .evaluate((element) => getComputedStyle(element).opacity);
+
+test("a static scene shows both slogan lines from the start", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/login");
+  await expect(canvas(page)).toHaveAttribute("data-ready", "static");
+  expect(await opacity(page, ".loginSloganChallenge")).toBe("1");
+  expect(await opacity(page, ".loginSloganShare")).toBe("1");
+});
+
+test("slogan lines, calm and share follow the scene and the sign-in", async ({
+  page,
+}) => {
+  test.setTimeout(150_000);
+  await page.setViewportSize({ width: 960, height: 540 });
+  await page.goto("/login");
+  test.skip(
+    !(await hasWebGL2(page)),
+    "이 브라우저에서 WebGL2를 쓸 수 없습니다",
+  );
+  await expect(canvas(page)).toHaveAttribute("data-intro", "complete", {
+    timeout: 90_000,
+  });
+  await expect.poll(() => opacity(page, ".loginSloganChallenge")).toBe("1");
+  expect(await opacity(page, ".loginSloganShare")).toBe("0");
+
+  await page.getByLabel("아이디").focus();
+  await expect
+    .poll(async () => Number(await canvas(page).getAttribute("data-calm")))
+    .toBeGreaterThan(0.9);
+
+  await page.getByLabel("아이디").fill("hr-admin");
+  await page.getByLabel("비밀번호").fill(fixturePassword());
+  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(page.locator(".loginPage")).toHaveAttribute(
+    "data-shared",
+    "true",
+  );
+  await page.waitForURL("**/employees", { timeout: 15_000 });
+});
+
+test("slogan keeps 3:1 contrast against the scene behind it", async ({
+  page,
+}) => {
+  test.setTimeout(150_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/login");
+  test.skip(
+    !(await hasWebGL2(page)),
+    "이 브라우저에서 WebGL2를 쓸 수 없습니다",
+  );
+  await expect(canvas(page)).toHaveAttribute("data-intro", "complete", {
+    timeout: 90_000,
+  });
+  const box = await page.locator(".loginSlogan").boundingBox();
+  if (!box) throw new Error("slogan is not rendered");
+  await page.addStyleTag({
+    content: ".loginSlogan { visibility: hidden !important; }",
+  });
+  const shot = await page.screenshot({ clip: box });
+  const ratios = await page.evaluate(
+    async ({ base64, colors }) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${base64}`;
+      await image.decode();
+      const surface = document.createElement("canvas");
+      surface.width = image.width;
+      surface.height = image.height;
+      const context = surface.getContext("2d")!;
+      context.drawImage(image, 0, 0);
+      const { data } = context.getImageData(
+        0,
+        0,
+        surface.width,
+        surface.height,
+      );
+      const channel = (value: number) => {
+        const c = value / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      };
+      const luminance = (r: number, g: number, b: number) =>
+        0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+      const values: number[] = [];
+      for (let i = 0; i < data.length; i += 4)
+        values.push(luminance(data[i], data[i + 1], data[i + 2]));
+      values.sort((a, b) => a - b);
+      // 눈송이 같은 작은 밝은 점을 빼기 위해 90번째 백분위수를 배경으로 본다.
+      const background = values[Math.floor(values.length * 0.9)];
+      return colors.map((hex) => {
+        const text = luminance(
+          parseInt(hex.slice(1, 3), 16),
+          parseInt(hex.slice(3, 5), 16),
+          parseInt(hex.slice(5, 7), 16),
+        );
+        const [high, low] =
+          text > background ? [text, background] : [background, text];
+        return (high + 0.05) / (low + 0.05);
+      });
+    },
+    { base64: shot.toString("base64"), colors: ["#a0c840", "#33a9e6"] },
+  );
+  for (const ratio of ratios) expect(ratio).toBeGreaterThanOrEqual(3);
 });
