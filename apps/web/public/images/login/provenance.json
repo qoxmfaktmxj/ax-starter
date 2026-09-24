@@ -1,0 +1,55 @@
+{
+  "license_source": "https://polyhaven.com/license",
+  "geometry": "ISU letters built from independently authored rounded ice blocks and arc wedges (apps/web/app/login/isu-layout.ts). Terrain, snow and frost shading ported from landing-minseok91 arctic-scene.ts owned by the same author.",
+  "runtime_external_requests": false,
+  "copied_from": "landing-minseok91/public/images/arctic (2026-09-24)",
+  "mobile": "mobile/ holds the same five textures at 1024px, produced by landing-minseok91 scripts/build-arctic-mobile-textures.mjs",
+  "textures": [
+    {
+      "file": "rough_plaster_03-diffuse.webp",
+      "license": "CC0-1.0",
+      "author": "Rob Tuytel",
+      "source_page": "https://polyhaven.com/a/rough_plaster_03",
+      "source_url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rough_plaster_03/rough_plaster_03_diff_2k.jpg",
+      "transformation": "JPEG to WebP encoding, 2048px resolution retained",
+      "sha256": "6ba0891eaf3a902787066677c4976c65fead761edd863cdcdf7e3191d1881dea"
+    },
+    {
+      "file": "rough_plaster_03-nor_gl.webp",
+      "license": "CC0-1.0",
+      "author": "Rob Tuytel",
+      "source_page": "https://polyhaven.com/a/rough_plaster_03",
+      "source_url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rough_plaster_03/rough_plaster_03_nor_gl_2k.jpg",
+      "transformation": "JPEG to WebP encoding, 2048px resolution retained",
+      "sha256": "8d4b99ad0b452c3613de108c826a5e35be4b27fbc2ed4a4a604459ecc7c8e0dd"
+    },
+    {
+      "file": "aerial_rocks_02-diffuse.webp",
+      "license": "CC0-1.0",
+      "author": "Rob Tuytel",
+      "source_page": "https://polyhaven.com/a/aerial_rocks_02",
+      "source_url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_rocks_02/aerial_rocks_02_diff_2k.jpg",
+      "transformation": "JPEG to WebP encoding, 2048px resolution retained",
+      "sha256": "02277f5cba925088f89dd1b12a282c3d3ca922bae7c58bc1d78308e0350db5b2"
+    },
+    {
+      "file": "aerial_rocks_02-nor_gl.webp",
+      "license": "CC0-1.0",
+      "author": "Rob Tuytel",
+      "source_page": "https://polyhaven.com/a/aerial_rocks_02",
+      "source_url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_rocks_02/aerial_rocks_02_nor_gl_2k.jpg",
+      "transformation": "JPEG to WebP encoding, 2048px resolution retained",
+      "sha256": "20d160edb1ef7c87d4c15c25a738e7aeb7092e2bf2596cb5d9fd9e885f3d02a5"
+    },
+    {
+      "file": "snow_02-diffuse.webp",
+      "license": "CC0-1.0",
+      "author": "Rob Tuytel",
+      "source_page": "https://polyhaven.com/a/snow_02",
+      "source_url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/snow_02/snow_02_diff_2k.jpg",
+      "transformation": "JPEG to WebP encoding, 2048px resolution retained",
+      "sha256": "9bce18a9c0e26effffdf04c996789f1f395845c1a4668ee41203ed30d0618a66"
+    }
+  ],
+  "stills": "login-still-desktop.webp and login-still-mobile.webp are captured from this scene by scripts/capture-login-still.ts"
+}

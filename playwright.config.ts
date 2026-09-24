@@ -14,7 +14,13 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        // 컨테이너 Chromium에는 GPU가 없어 SwiftShader로 WebGL을 켠다.
+        launchOptions: {
+          args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
+        },
+      },
     },
   ],
 });

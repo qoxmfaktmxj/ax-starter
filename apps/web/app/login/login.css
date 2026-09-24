@@ -25,6 +25,24 @@
   );
 }
 
+.loginScene:has(canvas[data-ready="false"]),
+.loginScene:has(canvas[data-ready="static"]) {
+  background: var(--color-login-sky-top)
+    url("/images/login/login-still-desktop.webp") center / cover no-repeat;
+}
+
+.loginScene canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+.loginScene canvas[data-preview="true"] {
+  opacity: 1;
+}
+
 .loginBrand {
   align-self: end;
   padding-bottom: 14vh;
@@ -172,5 +190,10 @@
 
   .loginPanel {
     padding: var(--space-6) var(--space-4);
+  }
+
+  .loginScene:has(canvas[data-ready="false"]),
+  .loginScene:has(canvas[data-ready="static"]) {
+    background-image: url("/images/login/login-still-mobile.webp");
   }
 }

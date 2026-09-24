@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "../../auth-client";
+import LoginScene from "./LoginScene";
 import "./login.css";
 
 const INVALID_CREDENTIALS = "아이디 또는 비밀번호가 올바르지 않습니다.";
@@ -60,7 +61,7 @@ export default function LoginPage() {
 
   return (
     <main className="loginPage" data-shared={shared}>
-      <div className="loginScene" aria-hidden="true" />
+      <LoginScene />
       <section className="loginBrand" aria-label="ISU 슬로건">
         <p className="loginSlogan">
           <span className="loginSloganChallenge">Challenge the Future</span>
