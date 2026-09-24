@@ -62,6 +62,59 @@ a {
   background: rgb(60 109 238 / 18%);
 }
 
+/* 12px 영역 가운데 2px 레일, 평소 4px 막대, 잡으면 8px. 색은 역할 토큰을 따른다. */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: linear-gradient(
+    90deg,
+    transparent 5px,
+    var(--color-scrollbar-track) 5px 7px,
+    transparent 7px
+  );
+}
+
+::-webkit-scrollbar-track:horizontal {
+  background: linear-gradient(
+    180deg,
+    transparent 5px,
+    var(--color-scrollbar-track) 5px 7px,
+    transparent 7px
+  );
+}
+
+::-webkit-scrollbar-thumb {
+  border: 4px solid transparent;
+  border-radius: 999px;
+  background-color: var(--color-scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+:hover::-webkit-scrollbar-thumb {
+  background-color: var(--color-scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  border-width: 2px;
+  background-color: var(--color-scrollbar-thumb-active);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Chrome은 표준 속성이 지정되면 webkit 꾸밈을 무시하므로 Firefox에만 표준 속성을 준다. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-scrollbar-thumb) transparent;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

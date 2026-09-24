@@ -19,4 +19,26 @@
   --color-success: var(--status-success);
   --color-warning: var(--status-warning);
   --color-danger: var(--status-danger);
+
+  --color-scrollbar-thumb: color-mix(
+    in srgb,
+    var(--color-action) 55%,
+    transparent
+  );
+  --color-scrollbar-thumb-hover: color-mix(
+    in srgb,
+    var(--color-action) 80%,
+    transparent
+  );
+  --color-scrollbar-thumb-active: var(--color-action-hover);
+  --color-scrollbar-track: var(--color-border);
+
+  --color-login-action: var(--brand-isu-blue-strong);
+  --color-login-action-hover: var(--brand-isu-blue-deep);
+  --color-login-slogan-challenge: var(--brand-isu-lime);
+  --color-login-slogan-share: var(--brand-isu-sky);
+  --color-login-sky-top: var(--brand-isu-night);
+  --color-login-sky-bottom: var(--brand-isu-dusk);
+  --color-login-panel: var(--neutral-frost);
+  --color-login-panel-border: var(--neutral-frost-edge);
 }

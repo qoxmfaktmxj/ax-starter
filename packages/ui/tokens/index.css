@@ -6,6 +6,15 @@
   --brand-cobalt-hover: #2f5cd8;
   --brand-cobalt-active: #244dbd;
 
+  /* ISU brand, sampled from the supplied logo images. Replace with the official guide values. */
+  --brand-isu-blue: #0090d0;
+  --brand-isu-blue-strong: #0077b6;
+  --brand-isu-blue-deep: #005f92;
+  --brand-isu-sky: #33a9e6;
+  --brand-isu-lime: #a0c840;
+  --brand-isu-night: #131c2b;
+  --brand-isu-dusk: #4a5d7a;
+
   /* Neutral palette */
   --neutral-white: #ffffff;
   --neutral-canvas: #f8fafc;
@@ -17,6 +26,8 @@
   --neutral-secondary: #475569;
   --neutral-ink: #111318;
   --neutral-login-ink: #0e1b31;
+  --neutral-frost: rgb(244 248 252 / 86%);
+  --neutral-frost-edge: rgb(255 255 255 / 70%);
 
   /* Status palette */
   --status-success: #087832;
@@ -46,4 +57,5 @@
   --space-4: 16px;
   --space-6: 24px;
   --focus-ring: 0 0 0 3px rgb(60 109 238 / 28%);
+  --shadow-login-panel: 0 24px 60px rgb(0 0 0 / 35%);
 }
