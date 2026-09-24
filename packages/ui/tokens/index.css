@@ -1,0 +1,49 @@
+:root {
+  color-scheme: light;
+
+  /* Brand palette */
+  --brand-cobalt: #3c6dee;
+  --brand-cobalt-hover: #2f5cd8;
+  --brand-cobalt-active: #244dbd;
+
+  /* Neutral palette */
+  --neutral-white: #ffffff;
+  --neutral-canvas: #f8fafc;
+  --neutral-subtle: #eef3fa;
+  --neutral-border: #e2e8f0;
+  --neutral-border-strong: #cbd5e1;
+  --neutral-control-border: #8392a5;
+  --neutral-muted: #64748b;
+  --neutral-secondary: #475569;
+  --neutral-ink: #111318;
+  --neutral-login-ink: #0e1b31;
+
+  /* Status palette */
+  --status-success: #087832;
+  --status-warning: #b45309;
+  --status-danger: #cc2936;
+
+  /* Type */
+  --font-sans:
+    "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic",
+    sans-serif;
+  --font-display: Geist, "Pretendard Variable", Pretendard, sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 0.875rem;
+  --font-size-lg: 1rem;
+  --font-size-title: 1.5rem;
+  --font-size-display: clamp(2.5rem, 5vw, 3.5rem);
+  --line-height-body: 1.5;
+
+  /* Shape and spacing */
+  --radius-control: 6px;
+  --radius-panel: 8px;
+  --radius-grid: 6px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --focus-ring: 0 0 0 3px rgb(60 109 238 / 28%);
+}

@@ -1,0 +1,22 @@
+:root {
+  --color-action: var(--brand-cobalt);
+  --color-action-hover: var(--brand-cobalt-hover);
+  --color-action-active: var(--brand-cobalt-active);
+  --color-action-text: var(--neutral-white);
+  --color-link: var(--brand-cobalt-hover);
+
+  --color-surface: var(--neutral-white);
+  --color-canvas: var(--neutral-canvas);
+  --color-surface-subtle: var(--neutral-subtle);
+  --color-border: var(--neutral-border);
+  --color-border-strong: var(--neutral-border-strong);
+  --color-control-border: var(--neutral-control-border);
+  --color-text: var(--neutral-ink);
+  --color-text-muted: var(--neutral-muted);
+  --color-text-on-subtle: var(--neutral-secondary);
+  --color-text-login: var(--neutral-login-ink);
+
+  --color-success: var(--status-success);
+  --color-warning: var(--status-warning);
+  --color-danger: var(--status-danger);
+}

@@ -1,0 +1,9 @@
+:root {
+  --grid-row-height: 38px;
+  --grid-header-height: 40px;
+}
+
+[data-density="compact"] {
+  --grid-row-height: 34px;
+  --grid-header-height: 36px;
+}

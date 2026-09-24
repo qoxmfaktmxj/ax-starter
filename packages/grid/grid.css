@@ -1,0 +1,19 @@
+.employeeGrid {
+  width: 100%;
+  height: min(68vh, 720px);
+  min-height: 320px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-grid);
+  background: var(--color-surface);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+}
+
+.gridCell--decimal {
+  font-variant-numeric: tabular-nums;
+}
+
+.gridCell--date {
+  font-variant-numeric: tabular-nums;
+}

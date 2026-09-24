@@ -1,0 +1,20 @@
+{
+  "interactiveLogin": true,
+  "tokenCallbacks": [
+    {
+      "issuerId": "default",
+      "requestMappings": [
+        {
+          "requestParam": "subject",
+          "match": ".*",
+          "claims": {
+            "sub": "${subject}",
+            "aud": ["ax-starter"],
+            "email": "${subject}@example.invalid",
+            "name": "${subject}"
+          }
+        }
+      ]
+    }
+  ]
+}

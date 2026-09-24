@@ -1,0 +1,114 @@
+.loginPage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  align-items: center;
+  gap: clamp(32px, 8vw, 120px);
+  width: min(1120px, 100%);
+  min-height: 100vh;
+  margin-inline: auto;
+  padding: clamp(28px, 7vw, 88px);
+  background: var(--color-surface);
+}
+
+.loginIntro {
+  max-width: 580px;
+}
+
+.loginEyebrow {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.loginIntro h1 {
+  margin: 0;
+  color: var(--color-text-login);
+  font-family: var(--font-display);
+  font-size: var(--font-size-display);
+  font-weight: 600;
+  letter-spacing: -0.055em;
+  line-height: 1.05;
+}
+
+.loginDescription {
+  max-width: 28rem;
+  margin: var(--space-4) 0 0;
+  color: var(--color-text-secondary, var(--color-text-on-subtle));
+  font-size: var(--font-size-lg);
+}
+
+.loginPanel {
+  width: 100%;
+  max-width: 420px;
+  padding: clamp(24px, 4vw, 40px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+
+.loginPanel h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.loginCopy {
+  margin: var(--space-2) 0 var(--space-6);
+  color: var(--color-text-muted);
+}
+
+.loginButton {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px var(--space-4);
+  border: 1px solid var(--color-action);
+  border-radius: var(--radius-control);
+  background: var(--color-action);
+  color: var(--color-action-text);
+  font-weight: 600;
+}
+
+.loginButton:hover:not(:disabled) {
+  border-color: var(--color-action-hover);
+  background: var(--color-action-hover);
+}
+
+.loginButton:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.loginNotice {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.loginStatus {
+  min-height: 1.5em;
+  margin: var(--space-3) 0 0;
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
+
+@media (max-width: 700px) {
+  .loginPage {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    gap: var(--space-6);
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .loginIntro h1 {
+    font-size: clamp(2.5rem, 14vw, 3.5rem);
+  }
+
+  .loginPanel {
+    max-width: none;
+    padding: var(--space-4);
+  }
+}

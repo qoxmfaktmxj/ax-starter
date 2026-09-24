@@ -1,0 +1,13 @@
+node_modules/
+.next/
+.env
+.env.*.local
+coverage/
+test-results/
+playwright-report/
+.playwright-cli/
+.playwright-mcp/
+output/
+.omx/
+*.tsbuildinfo
+data/

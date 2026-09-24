@@ -1,0 +1,2 @@
+CREATE DATABASE ax_integration;
+CREATE DATABASE ax_e2e;

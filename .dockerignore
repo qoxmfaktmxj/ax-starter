@@ -1,0 +1,12 @@
+node_modules
+.next
+**/node_modules
+**/.next
+.git
+.omx
+.env
+data
+test-results
+playwright-report
+.playwright-cli
+output
