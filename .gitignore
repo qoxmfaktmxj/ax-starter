@@ -9,5 +9,6 @@ playwright-report/
 .playwright-mcp/
 output/
 .omx/
+.superpowers/
 *.tsbuildinfo
 data/

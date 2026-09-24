@@ -39,7 +39,7 @@ PowerShell Get-FileHash 결과다. 문서 작성자는 이 원본을 수정하�
 | R18 | 로컬 복구 절차, 실제 NAS 검증은 운영 전 | kickoff 338 | MVP 9 |
 | R19 | 실제 Reference 뒤 Skill, 교육 신청으로 재사용 검증 | kickoff 342~348 | MVP 12, PRODUCT 후속 |
 | R20 | Keycloak/Valkey/관측 스택/외부 AI/대규모 upload 등 제외 | kickoff 352~358 | PRODUCT 제외 목록 |
-| R21 | Vibe HR은 권리 정리 전 화면/동작 참고만 | kickoff 57~62, 362~370 | 모든 인계 문서 |
+| R21 | Vibe HR은 권리 정리 전 화면/동작 참고만. 2026-09-24 사용자가 vibe-hr, landing-minseok91 소유자임을 확인해 해제 | kickoff 57~62, 362~370 | 모든 인계 문서 |
 | R22 | 각 Phase/보호 변경 승인, 한국어와 금지 기호 규칙 | kickoff 18~53 | CODING_HANDOFF 4, PRODUCT |
 
 이전 자료의 역할: commercial_v2 59~75/185~221행은 재배포 범위와 라이선스 검토, rereview 90~94/118~127행은 저장소/선결 조건의 배경이다. 상용 컴포넌트 종속 해소와 판매 가능성은 유지하지만 판매 출시 작업을 오늘 MVP에 합치지 않는다.
@@ -152,7 +152,7 @@ NFS와 SMB는 각각 검증한 조합만 지원한다. 실제 파일을 받기 �
 | ID | 미해결 조건 | 시점 |
 | --- | --- | --- |
 | B1 | 판매 주체 회사/개인 | 판매 전, 로컬 MVP를 막지 않음 |
-| B2 | Vibe HR 및 자체 코드 권리 | 코드 이식/회사 공통 플랫폼 전 |
+| B2 | Vibe HR 및 자체 코드 권리 | 해소: 2026-09-24 사용자 소유 확인 |
 | B3 | AI API 공급자 계정/계약 | 실제 외부 LLM 사용 전 |
 | B4 | Enterprise 혼입/키/우회/코드 출처 감사 | Vibe HR 자산 이식/플랫폼 전 |
 | B5 | 전체 납품물 license 검사 | 판매 전 |

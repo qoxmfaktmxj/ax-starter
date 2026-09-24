@@ -17,7 +17,7 @@
 - Vibe HR `frontend/src/components/hr/employee-master-search-section.tsx` 24~53행은 검색 의미, `employee-master-grid.tsx` 100~240행은 편집 행동, `employee-master-manager.tsx` 94~136행은 상태 문구 참고다.
 - 랜딩 `public/images/arctic-hero.webp`, Vibe HR `frontend/public/images/conservatory-login-desktop.webp`의 실제 로컬 이미지도 확인했다. 두 이미지는 배경 자산이며 현재 화면 전체의 캡처로 간주하지 않는다.
 
-이 문서에 재현에 필요한 원칙을 옮겼다. 후속 모델은 위 저장소가 없어도 아래 기준으로 구현할 수 있다. 코드를 복사하지 않고, 로고/장면/이미지도 가져오지 않는다.
+이 문서에 재현에 필요한 원칙을 옮겼다. 후속 모델은 위 저장소가 없어도 아래 기준으로 구현할 수 있다. 두 저장소는 사용자 소유이므로 코드, 로고, 3D 장면, 이미지를 가져와 쓸 수 있다(2026-09-24 사용자 결정).
 
 ## 2. 사용 장면과 화면 구조
 
@@ -39,7 +39,7 @@
 
 로그인, 사원관리, 관리자 감사 조회가 전체 화면 범위다. 별도 대시보드/KPI 카드/소개 hero를 만들지 않는다. 상세 패널은 조회한 사원의 기본 정보와 첨부만 갖고 비밀번호/민감 identity를 표시하지 않는다.
 
-로그인은 좌측의 큰 영문 코드명과 짧은 한국어 목적 문장, 우측의 명확한 '테스트 계정으로 로그인' 진입으로 구성한다. 배경 장면이나 Three.js를 새로 만들지 않는다. OIDC fixture 로그인 화면을 실제 회사 인증으로 오해하지 않도록 local 안내를 둔다.
+로그인은 [ISU 로그인 설계](superpowers/specs/2026-09-24-isu-login-design.md)를 따른다. 얼음 블록 ISU 3D 장면, 서리 유리 패널의 아이디/비밀번호 로그인, 작은 SSO 로그인으로 구성한다. OIDC fixture 로그인 화면을 실제 회사 인증으로 오해하지 않도록 local 안내를 둔다.
 
 ## 3. 토큰 제안과 구현 원칙
 
@@ -63,11 +63,11 @@
 | default/compact | 행 38/34px, 헤더 40/36px | compact는 Vibe HR의 34/36px 기준 |
 | 여백 | 4/8/12/16/24px | 검색/toolbar는 밀도 있게, 표 주변 16~24px |
 
-Brand base -> semantic -> component의 3단계로 연결한다. `packages/grid/theme.ts`는 semantic/density 토큰을 AG Grid로 변환한다. 각 화면에서 색/높이를 제각각 하드코딩하지 않는다. 브랜딩 설정 UI나 여러 팔레트 기능은 만들지 않는다.
+Brand base -> semantic -> component의 3단계로 연결한다. `packages/grid/theme.ts`는 semantic/density 토큰을 AG Grid로 변환한다. 각 화면에서 색/높이를 제각각 하드코딩하지 않는다. 브랜딩 설정 UI와 여러 팔레트(테마) 기능은 ISU 로그인 교체 다음 최우선 과제로 별도 설계한다.
 
 입력과 버튼의 경계는 흰 작업면에서 3:1을 확보하는 별도 control border 토큰을 사용한다. 표 구분선과 패널 테두리의 낮은 대비 토큰과 구분한다.
 
-v4 Blue/Lime은 kickoff에서 가설로 내려갔다. 오늘 실제 AI 기능이 없으므로 Lime 배지나 AI 반짝이 아이콘을 억지로 넣지 않는다. 전체 Dark Mode는 제외한다.
+v4 Blue/Lime은 kickoff에서 가설로 내려갔다. 오늘 실제 AI 기능이 없으므로 Lime 배지나 AI 반짝이 아이콘을 억지로 넣지 않는다. 전체 Dark Mode는 테마 시스템 과제에서 함께 다룬다.
 
 ## 4. 조작 계약
 
@@ -103,6 +103,6 @@ P0 검증: 데스크톱 정상/오류/충돌 상태, 키보드 Tab/Enter/Escape,
 
 사용자는 위 결합 방향을 선택했다. 기존 kickoff의 A/B 두 시안 선택 요구는 이번 선택으로 방향이 결정된 상태다. 구현 후 화면 확인은 필요하지만 오늘 다시 두 개의 완성 UI를 만들 필요는 없다.
 
-금지: 카드 반복, 그라데이션 글자/보라 그라데이션/유리 효과, 의미 없는 아이콘/배지, 영문 fallback에 맡긴 한글, Grid 행 애니메이션, 3D/물/눈/쉐이더, 무거운 모션 라이브러리, 외부 CDN 폰트, 원본 이미지/코드 복사.
+금지: 카드 반복, 그라데이션 글자/보라 그라데이션, 의미 없는 아이콘/배지, 영문 fallback에 맡긴 한글, Grid 행 애니메이션, 외부 CDN 폰트.
 
 Vibe HR의 range paste, fill handle, undo/redo, 현재 페이지 pivot/통계 기능은 그 제품의 독립 기능이다. Starter에 범위가 확장된 것으로 해석하지 않는다. 자체 Grid 두 모드와 원자적 저장부터 완성한다.
