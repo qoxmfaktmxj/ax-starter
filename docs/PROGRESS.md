@@ -60,3 +60,24 @@
 P1 미검증 항목은 AC07의 abort/rename 전체 fault matrix, AC09의 모든 crash 지점 주입, AC11의 자동 PDF 이미지 회귀, AC13의 위반 fixture와 전이 의존성 deny 자동화, AC14의 axe 및 모바일 전수 검사, AC15의 SIGTERM/연결 수 실측, AC16의 DB와 파일 공동 백업 script와 새 volume 복원 리허설이다. [복구 절차](RECOVERY.md)는 작성했으며 리허설 통과로 표시하지 않는다.
 
 Next build는 통과했지만 fs 경로의 동적 접근으로 Turbopack trace 경고 9건이 남았다. 로컬 이미지에 파일을 포함해 동작은 검증했으며, standalone 추적 범위 정리는 후속이다. 최종 이미지와 모든 납품물의 전이 라이선스 심사도 후속이다. 실제 NAS/IdP/악성코드 검사기/S3, 외부 AI, 전체 Skill 목록과 두 번째 모듈은 연결하지 않았다.
+
+## 2026-09-25 검사 자원 정리와 안내 갱신
+
+성공 기준은 일회성 검사 프로젝트의 컨테이너, 네트워크, 전용 volume과 이미지가 남지 않고 기본 `ax-starter` 실행 환경이 유지되는 것이다. README는 현재 `feat/isu-login` 브랜치의 로그인 코드와 Compose 실행 방식을 설명해야 한다.
+
+- `docker compose ls --all`에서 `ax-starter-grid`는 종료 상태, `ax-starter`는 실행 중임을 확인했다.
+- `docker volume inspect ax-starter-grid_test-db ax-starter-grid_test-files`에서 두 volume의 프로젝트 레이블을 확인하고, 두 volume을 참조하는 컨테이너가 없음을 확인했다.
+- `docker volume rm ax-starter-grid_test-db ax-starter-grid_test-files`: exit 0.
+- 참조 컨테이너가 없는 전용 이미지 `ax-starter-grid-test:latest`와 `ax-starter-grid-test-setup-e2e:latest`를 `docker image rm`으로 제거했다: exit 0.
+- 다시 실행한 `docker compose ls --all`에 `ax-starter-grid`는 없고 `ax-starter`의 실행 컨테이너 5개가 남아 있었다. 다른 프로젝트와 공유 이미지, 기본 데이터 volume은 건드리지 않았다.
+- `docker compose --profile test config --services`에서 test-db, test-init-files, test-oidc, test-setup-e2e, test-web, test-worker, test 서비스를 확인했다.
+
+## 2026-09-25 공용 SDD 스펙 스킬
+
+성공 기준은 Codex와 Claude Code가 한 스펙 설계 절차를 사용할 수 있게 하고, 공통 작업 규칙은 기존 `AGENTS.md` 하나로 유지하는 것이다. 자연어 요청으로 스킬을 선택할 수 있도록 기능과 적용 범위를 설명에 적고, 첫 실행은 설계와 계획까지만 진행하게 한다.
+
+- `.agents/skills/sdd-spec/SKILL.md`에 스펙 설계 절차를 작성했다. `.claude/skills/sdd-spec/SKILL.md`는 이를 읽는 연결 파일이며 프로젝트 `CLAUDE.md`는 만들지 않았다.
+- 두 스킬 폴더에 `python -X utf8`로 `skill-creator/scripts/quick_validate.py`를 실행했다: 각각 `Skill is valid!`.
+- `claude --version`: 2.1.281. 자연어 호출 확인을 위해 `claude -p --permission-mode plan --max-turns 3`을 실행했으나 OAuth 세션 만료로 인증에 실패했다. Claude의 실제 자동 선택은 미검증이다.
+- Claude Code의 기본 설정에서는 상위 디렉터리에 `CLAUDE.md`가 있으면 프로젝트 `AGENTS.md`가 자동으로 선택되지 않을 수 있다. 이 스킬의 Claude 연결 파일은 `AGENTS.md`를 명시적으로 읽도록 한다. 일반 Claude 작업의 프로젝트 규칙 로드는 별도 확인이 필요하다.
+- 이 컴퓨터의 `~/.claude/settings.json`에 `agents-md@builtin`의 `instructionFiles: claude-md-and-agents-md`를 설정했다. JSON 파싱과 Claude Code 2.1.281 버전은 확인했지만 인증 만료로 새 세션에서 실제 규칙 로드는 확인하지 못했다. 이 사용자 설정은 저장소에 포함되지 않는다.
