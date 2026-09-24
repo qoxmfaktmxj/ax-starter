@@ -12,7 +12,7 @@
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm architecture",
-    "format:check": "prettier --check apps packages scripts tests",
+    "format:check": "prettier --check --end-of-line auto apps packages scripts tests",
     "lint": "eslint apps packages scripts tests",
     "typecheck": "tsc --noEmit",
     "architecture": "tsx scripts/check-boundaries.ts",

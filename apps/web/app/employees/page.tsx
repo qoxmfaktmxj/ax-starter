@@ -1,7 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { BRAND_NAME } from "../../../../packages/core/brand";
+import { employeeUpdate } from "../../../../packages/contracts/employees";
 import type {
   BatchSaveRequest,
   BatchSaveResult,
@@ -10,6 +18,7 @@ import type {
 } from "../../../../packages/contracts/employees";
 import {
   DataGrid,
+  type GridCellChange,
   type GridColumn,
   type GridSort,
 } from "../../../../packages/grid/DataGrid";
@@ -57,6 +66,40 @@ const editableFields = [
   "monthlySalary",
 ] as const;
 
+type DraftState = {
+  rows: EmployeeRow[];
+  undo: EmployeeRow[][];
+  redo: EmployeeRow[][];
+};
+
+type DraftAction =
+  | { type: "reset"; rows: EmployeeRow[] }
+  | { type: "change"; update: (rows: EmployeeRow[]) => EmployeeRow[] }
+  | { type: "undo" | "redo" };
+
+function draftReducer(state: DraftState, action: DraftAction): DraftState {
+  if (action.type === "reset") return { rows: action.rows, undo: [], redo: [] };
+  if (action.type === "change") {
+    const rows = action.update(state.rows);
+    if (rows === state.rows) return state;
+    return { rows, undo: [...state.undo.slice(-29), state.rows], redo: [] };
+  }
+  const from = state[action.type];
+  if (!from.length) return state;
+  const rows = from[from.length - 1];
+  return {
+    rows,
+    undo:
+      action.type === "undo"
+        ? from.slice(0, -1)
+        : [...state.undo.slice(-29), state.rows],
+    redo:
+      action.type === "redo"
+        ? from.slice(0, -1)
+        : [...state.redo.slice(-29), state.rows],
+  };
+}
+
 function clientUuid(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
@@ -100,7 +143,12 @@ export default function EmployeesPage() {
   const [count, setCount] = useState(0);
   const [countCapped, setCountCapped] = useState(false);
   const [baseRows, setBaseRows] = useState<EmployeeRow[]>([]);
-  const [draftRows, setDraftRows] = useState<EmployeeRow[]>([]);
+  const [draftState, dispatchDraft] = useReducer(draftReducer, {
+    rows: [],
+    undo: [],
+    redo: [],
+  });
+  const draftRows = draftState.rows;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedRow, setSelectedRow] = useState<EmployeeRow | null>(null);
   const [files, setFiles] = useState<FileInfo[]>([]);
@@ -277,7 +325,7 @@ export default function EmployeesPage() {
       if (status !== 200)
         throw new Error(data.message ?? "편집할 행을 불러오지 못했습니다");
       setBaseRows(data.rows);
-      setDraftRows(data.rows);
+      dispatchDraft({ type: "reset", rows: data.rows });
       setError("");
       setSelectedIds([]);
       requestRef.current = null;
@@ -390,19 +438,86 @@ export default function EmployeesPage() {
       busy
     )
       return;
-    setDraftRows((rows) =>
-      rows.map((row) =>
-        row.id === id
-          ? {
-              ...row,
-              [field]:
-                field === "monthlySalary" && (value == null || value === "")
-                  ? null
-                  : String(value ?? ""),
-            }
-          : row,
-      ),
-    );
+    dispatchDraft({
+      type: "change",
+      update: (rows) => {
+        const nextValue =
+          field === "monthlySalary" && (value == null || value === "")
+            ? null
+            : String(value ?? "");
+        if (
+          !rows.some(
+            (row) =>
+              row.id === id && row[field as keyof EmployeeRow] !== nextValue,
+          )
+        )
+          return rows;
+        return rows.map((row) =>
+          row.id === id ? { ...row, [field]: nextValue } : row,
+        );
+      },
+    });
+    setError("");
+    setConflicts([]);
+    setRowErrors([]);
+  }
+
+  function applyCells(changes: GridCellChange[]) {
+    if (mode !== "batch-edit" || busy)
+      throw new Error("지금은 붙여넣을 수 없습니다.");
+    const patches = new Map<string, Record<string, string | null>>();
+    for (const { rowId, field, value } of changes) {
+      const column = columns.find((item) => item.field === field);
+      if (!column?.editable || !draftRows.some((row) => row.id === rowId))
+        throw new Error("편집할 수 없는 셀이 포함돼 있습니다.");
+      const input =
+        field === "status"
+          ? value === "재직"
+            ? "ACTIVE"
+            : value === "휴직"
+              ? "LEAVE"
+              : value
+          : field === "monthlySalary" && value === ""
+            ? null
+            : value;
+      const parsed = employeeUpdate.safeParse({ [field]: input });
+      if (!parsed.success)
+        throw new Error(
+          `${column.label}: ${parsed.error.issues[0]?.message ?? "값을 확인하세요."}`,
+        );
+      patches.set(rowId, {
+        ...patches.get(rowId),
+        [field]: (parsed.data as Record<string, string | null>)[field],
+      });
+    }
+    dispatchDraft({
+      type: "change",
+      update: (rows) => {
+        let changed = false;
+        const next = rows.map((row) => {
+          const patch = patches.get(row.id);
+          if (
+            !patch ||
+            !Object.entries(patch).some(
+              ([field, value]) => row[field as keyof EmployeeRow] !== value,
+            )
+          )
+            return row;
+          changed = true;
+          return { ...row, ...patch };
+        });
+        return changed ? next : rows;
+      },
+    });
+    setError("");
+    setConflicts([]);
+    setRowErrors([]);
+  }
+
+  function restoreDraft(direction: "undo" | "redo") {
+    if (busy) return;
+    commitEditingRef.current?.();
+    dispatchDraft({ type: direction });
     setError("");
     setConflicts([]);
     setRowErrors([]);
@@ -420,22 +535,23 @@ export default function EmployeesPage() {
     if (!employeeNo) return;
     const name = window.prompt("새 사원의 이름을 입력하세요.");
     if (!name) return;
-    setDraftRows((rows) => [
-      {
-        id: `new-${clientUuid()}`,
-        employeeNo,
-        name,
-        orgId: org.orgId,
-        orgName: org.orgName,
-        position: "",
-        hireDate: new Date().toISOString().slice(0, 10),
-        status: "ACTIVE",
-        email: "",
-        ...(me?.fields.salary?.read ? { monthlySalary: null } : {}),
-        rowVersion: 1,
-      },
-      ...rows,
-    ]);
+    const newRow: EmployeeRow = {
+      id: `new-${clientUuid()}`,
+      employeeNo,
+      name,
+      orgId: org.orgId,
+      orgName: org.orgName,
+      position: "",
+      hireDate: new Date().toISOString().slice(0, 10),
+      status: "ACTIVE",
+      email: "",
+      ...(me?.fields.salary?.read ? { monthlySalary: null } : {}),
+      rowVersion: 1,
+    };
+    dispatchDraft({
+      type: "change",
+      update: (rows) => [newRow, ...rows],
+    });
     setNotice("새 행을 추가했습니다. 필요한 항목을 확인한 뒤 저장하세요.");
   }
 
@@ -451,7 +567,10 @@ export default function EmployeesPage() {
       )
     )
       return;
-    setDraftRows((rows) => rows.filter((row) => !selectedIds.includes(row.id)));
+    dispatchDraft({
+      type: "change",
+      update: (rows) => rows.filter((row) => !selectedIds.includes(row.id)),
+    });
     setSelectedIds([]);
     setNotice("삭제 예정 행은 저장할 때 반영됩니다.");
   }
@@ -487,7 +606,7 @@ export default function EmployeesPage() {
       if (status === 200 && data.ok) {
         setNotice(`${pendingChanges.length}건을 저장했습니다.`);
         setBaseRows([]);
-        setDraftRows([]);
+        dispatchDraft({ type: "reset", rows: [] });
         setSelectedIds([]);
         requestRef.current = null;
         setRefresh((value) => value + 1);
@@ -776,6 +895,18 @@ export default function EmployeesPage() {
               >
                 저장 {changes.length}건
               </button>
+              <button
+                onClick={() => restoreDraft("undo")}
+                disabled={busy || draftState.undo.length === 0}
+              >
+                실행 취소
+              </button>
+              <button
+                onClick={() => restoreDraft("redo")}
+                disabled={busy || draftState.redo.length === 0}
+              >
+                다시 실행
+              </button>
             </>
           )}
           <button onClick={() => void exportData("xlsx")} disabled={busy}>
@@ -785,6 +916,12 @@ export default function EmployeesPage() {
             PDF
           </button>
         </div>
+        {mode === "batch-edit" && (
+          <p className="workspaceGridGuide">
+            셀을 드래그해 범위를 선택하세요. Ctrl+C로 복사하고 Ctrl+V로
+            붙여넣습니다. 선택 끝의 점을 드래그하면 자동으로 채웁니다.
+          </p>
+        )}
         <div className="workspaceGridArea" aria-busy={loading}>
           {mode === "browse" ? (
             <DataGrid
@@ -793,6 +930,10 @@ export default function EmployeesPage() {
               columns={columns}
               loadRows={loadRows}
               onCellChange={editCell}
+              onGridMessage={(message, isError) => {
+                if (isError) setError(message);
+                else setNotice(message);
+              }}
               onSelectedIdsChange={setSelectedIds}
               loading={loading}
             />
@@ -802,6 +943,13 @@ export default function EmployeesPage() {
               columns={columns}
               rows={draftRows}
               onCellChange={editCell}
+              onCellsChange={applyCells}
+              onUndo={() => restoreDraft("undo")}
+              onRedo={() => restoreDraft("redo")}
+              onGridMessage={(message, isError) => {
+                if (isError) setError(message);
+                else setNotice(message);
+              }}
               onSelectedIdsChange={setSelectedIds}
               onEditingChanged={setEditing}
               commitEditingRef={commitEditingRef}
@@ -949,7 +1097,7 @@ export default function EmployeesPage() {
           if (!leaveAction) return;
           const action = leaveAction;
           setBaseRows([]);
-          setDraftRows([]);
+          dispatchDraft({ type: "reset", rows: [] });
           applyAction(action);
         }}
         onSave={() => {

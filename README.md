@@ -18,6 +18,8 @@ docker compose --profile local up -d web worker
 
 브라우저에서 [로컬 로그인](http://host.docker.internal:3000/login)을 연다. 아이디 `hr-admin` 또는 `org-manager`와 compose의 `LOCAL_FIXTURE_PASSWORD` 값(로컬 기본 `local-fixture-pass-2026`)으로 로그인한다. 화면 장면은 WebGL을 사용할 수 없는 경우 정지 화면으로 대체된다. 'SSO로 로그인'은 로컬 OIDC fixture를 열며, subject에 같은 아이디를 입력한다. 비밀번호 로그인과 OIDC 로그인은 서로 다른 인증 경로이고 별도 업무 계정으로 감사에 기록된다. `inactive-user`와 등록되지 않은 subject는 인증 경로와 무관하게 업무 접근이 거부된다. 초기 데이터는 A/B 조직 각 12명이다. 첨부의 다운로드 가능 상태를 시험하려면 [고정 가상 PNG](tests/fixtures/local-allowed.png)를 올린다. 일반 업로드는 검사기가 없으므로 격리된다.
 
+사원관리의 일괄편집은 최대 100행이다. 셀을 드래그해 범위를 선택하고 Ctrl+C, Ctrl+V로 복사와 붙여넣기를 사용한다. 선택 끝의 점을 드래그하면 날짜와 금액 문자열 등을 채운다. 실행 취소와 다시 실행은 저장 전 초안에만 적용된다. 조회형에서는 현재 불러온 행을 복사할 수 있지만 붙여넣기는 할 수 없다.
+
 서비스 상태와 로그:
 
 ```powershell

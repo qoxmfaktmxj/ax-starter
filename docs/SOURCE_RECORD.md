@@ -124,7 +124,7 @@ NFS와 SMB는 각각 검증한 조합만 지원한다. 실제 파일을 받기 �
 
 래퍼 밖 AG 타입 금지, 조회/편집 모델 구분, 행 상태/일괄 원자성, 제한된 선택 의미를 유지한다. Saved View는 schema version을 저장하며 삭제/권한 회수 컬럼은 제거, 이름 변경은 안정 ID 매핑, 알 수 없는 필터는 폐기하고 사용자에게 알린다. 대규모 조회는 filter-first, whitelist, stable sort, count/offset/timeout/index 한도를 적용한다. 대규모 export는 별도 Job/cursor다.
 
-툴바, 컨텍스트 메뉴, 컬럼 설정, Saved View, 단일 셀 clipboard는 후속 자체 구현 범위다. 다중 셀 영역 붙여넣기/fill/group/pivot은 원래 Starter 제외 범위로 유지한다. 리포트는 versioned data/template/renderer를 분리하고 대표 서식 이후에만 확장한다.
+툴바, 컨텍스트 메뉴, 컬럼 설정, Saved View는 후속 자체 구현 범위다. 원래 Starter 범위에서는 다중 셀 영역 붙여넣기/fill/group/pivot을 제외했다. 2026-09-25 사용자 후속 결정으로 범위 선택, 붙여넣기, 자동 채우기, 저장 전 실행 취소와 다시 실행을 Community 기반 자체 코드로 추가했다. group/pivot은 여전히 제외한다. 리포트는 versioned data/template/renderer를 분리하고 대표 서식 이후에만 확장한다.
 
 ### 판매 구조/라이선스
 
