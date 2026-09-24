@@ -60,3 +60,20 @@
 P1 미검증 항목은 AC07의 abort/rename 전체 fault matrix, AC09의 모든 crash 지점 주입, AC11의 자동 PDF 이미지 회귀, AC13의 위반 fixture와 전이 의존성 deny 자동화, AC14의 axe 및 모바일 전수 검사, AC15의 SIGTERM/연결 수 실측, AC16의 DB와 파일 공동 백업 script와 새 volume 복원 리허설이다. [복구 절차](RECOVERY.md)는 작성했으며 리허설 통과로 표시하지 않는다.
 
 Next build는 통과했지만 fs 경로의 동적 접근으로 Turbopack trace 경고 9건이 남았다. 로컬 이미지에 파일을 포함해 동작은 검증했으며, standalone 추적 범위 정리는 후속이다. 최종 이미지와 모든 납품물의 전이 라이선스 심사도 후속이다. 실제 NAS/IdP/악성코드 검사기/S3, 외부 AI, 전체 Skill 목록과 두 번째 모듈은 연결하지 않았다.
+
+## 2026-09-25 Grid 후속 확장
+
+성공 기준은 일괄편집의 최대 100행에서 범위 선택, TSV 복사와 붙여넣기, 자동 채우기, 저장 전 실행 취소와 다시 실행을 제공하고, 편집 불가 셀이 섞인 붙여넣기는 초안 전체를 유지하는 것이다. 조회형은 현재 불러온 셀의 복사만 허용한다. 저장 성공 때 이력을 비우고 실패나 충돌 때는 초안을 유지한다. 업무 Service의 최종 권한과 rowVersion 판정은 그대로 적용한다.
+
+DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 불변 초안과 최대 30단계 이력을 관리한다. 변경되지 않은 행 객체는 재사용하고 범위 표시 갱신은 프레임당 한 번으로 묶는다. Vibe HR 코드를 복사하지 않고 동작을 참고해 새로 작성했다.
+
+실행 결과:
+
+- `pnpm check`: exit 0, 경계 검사 53개 소스. Windows worktree의 CRLF 파일도 검사할 수 있도록 Prettier의 줄바꿈 판정을 `auto`로 지정했다.
+- `pnpm test`: exit 0, 단위 테스트 17개. TSV 따옴표와 빈 셀, 날짜 윤일과 큰 금액 문자열의 자동 채우기를 포함한다.
+- `docker compose -p ax-starter-grid --profile test build test-web test`: exit 0. 기존 fs 경로의 Turbopack trace 경고 9건은 그대로다.
+- `docker compose -p ax-starter-grid --profile test run --rm test pnpm check`와 `pnpm test`: exit 0, 경계 검사 53개 소스와 단위 테스트 17개.
+- `docker compose -p ax-starter-grid --profile test run --rm test pnpm test:integration`: exit 0, 15개.
+- `docker compose -p ax-starter-grid --profile test run --rm test pnpm e2e`: exit 0, 13개. 새 브라우저 검사 5개는 붙여넣기와 실행 취소, 잠긴 셀의 전체 거부, 범위 복사, 드래그 채우기, 새 행 추가의 실행 취소와 다시 실행을 확인했다.
+
+별도 Docker 프로젝트 이름을 써서 기존 로그인 작업의 컨테이너와 데이터를 변경하지 않았다. 대량 데이터 성능 수치와 모바일 범위 편집은 측정하거나 검증하지 않았다.

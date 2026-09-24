@@ -18,6 +18,8 @@ docker compose --profile local up -d web worker
 
 브라우저에서 [로컬 로그인](http://host.docker.internal:3000/login)을 연다. 테스트 로그인 화면의 subject에 `hr-admin` 또는 `org-manager`를 입력한다. `inactive-user`와 등록되지 않은 subject는 로그인 후에도 업무 접근이 거부된다. 초기 데이터는 A/B 조직 각 12명이다. 첨부의 다운로드 가능 상태를 시험하려면 [고정 가상 PNG](tests/fixtures/local-allowed.png)를 올린다. 일반 업로드는 검사기가 없으므로 격리된다.
 
+사원관리의 일괄편집은 최대 100행이다. 셀을 드래그해 범위를 선택하고 Ctrl+C, Ctrl+V로 복사와 붙여넣기를 사용한다. 선택 끝의 점을 드래그하면 날짜와 금액 문자열 등을 채운다. 실행 취소와 다시 실행은 저장 전 초안에만 적용된다. 조회형에서는 현재 불러온 행을 복사할 수 있지만 붙여넣기는 할 수 없다.
+
 서비스 상태와 로그:
 
 ```powershell

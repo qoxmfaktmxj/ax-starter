@@ -156,7 +156,7 @@ DataGrid 화면 계약은 columns(field,label,kind,editable), mode, rowId, query
 - batch-edit: 명시적으로 가져온 최대 100행, Client-Side Row Model. 한 화면 안에서 추가/수정/삭제와 변경 건수를 관리한다.
 - 신규 후 삭제는 changes에서 제거, 원래 값 복구는 clean, 수정 후 삭제는 delete 하나, 성공은 idMap/versions 반영과 dirty 초기화, 실패는 입력 보존.
 - 검색/모드/메뉴 변경과 브라우저 이탈에 미저장 경고. 저장 중 편집/중복 클릭 차단, 마지막 편집값을 확정한 뒤 요청.
-- 범위 붙여넣기, fill handle, pivot/group, 가짜 Enterprise 메뉴는 제외한다. Saved View는 오늘 저장 UI 없이 향후 `{schemaVersion,columnIds,filters,sort}`와 미존재/권한 회수 필드 제거 계약만 남긴다.
+- 초기 MVP에서 범위 붙여넣기, fill handle, pivot/group, 가짜 Enterprise 메뉴는 제외한다. Saved View는 오늘 저장 UI 없이 향후 `{schemaVersion,columnIds,filters,sort}`와 미존재/권한 회수 필드 제거 계약만 남긴다.
 
 ## 6. 파일 계약
 
