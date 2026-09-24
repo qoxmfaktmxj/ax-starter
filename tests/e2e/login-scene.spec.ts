@@ -26,7 +26,7 @@ test("the form works while scene textures are still loading", async ({
     await route.continue();
   });
   try {
-    await page.goto("/login");
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
     await expect(canvas(page)).not.toHaveAttribute("data-ready", "true");
     await page.getByLabel("아이디").fill("hr-admin");
     await page.getByLabel("비밀번호").fill(fixturePassword());
