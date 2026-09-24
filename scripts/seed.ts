@@ -1,3 +1,6 @@
+import { hashPassword } from "better-auth/crypto";
+import { account, user } from "../packages/server/auth/auth-schema";
+import { PASSWORD_ISSUER } from "../packages/server/auth/context";
 import { db, pool } from "../packages/server/db";
 import {
   appUsers,
@@ -9,6 +12,35 @@ const orgA = "11111111-1111-4111-8111-111111111111";
 const orgB = "22222222-2222-4222-8222-222222222222";
 const issuer =
   process.env.OIDC_ISSUER ?? "http://host.docker.internal:8090/default";
+
+const fixturePassword = process.env.LOCAL_FIXTURE_PASSWORD;
+if (!fixturePassword || fixturePassword.length < 8)
+  throw new Error("LOCAL_FIXTURE_PASSWORD must have at least 8 characters");
+
+// 비밀번호 로그인용 계정. SSO 계정과 별도의 업무 계정으로 감사에 기록된다.
+const passwordUsers = [
+  {
+    username: "hr-admin",
+    appUserId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    roleCode: "HR_ADMIN",
+    dataScope: "ALL",
+    active: 1,
+  },
+  {
+    username: "org-manager",
+    appUserId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    roleCode: "ORG_MANAGER",
+    dataScope: "ORG",
+    active: 1,
+  },
+  {
+    username: "inactive-user",
+    appUserId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+    roleCode: "ORG_MANAGER",
+    dataScope: "ORG",
+    active: 0,
+  },
+];
 
 try {
   await db
@@ -49,6 +81,52 @@ try {
       },
     ])
     .onConflictDoNothing();
+
+  await db
+    .insert(appUsers)
+    .values(
+      passwordUsers.map((entry) => ({
+        id: entry.appUserId,
+        issuer: PASSWORD_ISSUER,
+        subject: entry.username,
+        orgId: orgA,
+        active: entry.active,
+        roleCode: entry.roleCode,
+        dataScope: entry.dataScope,
+      })),
+    )
+    .onConflictDoNothing();
+
+  const passwordHash = await hashPassword(fixturePassword);
+  for (const entry of passwordUsers) {
+    const userId = `password-${entry.username}`;
+    await db
+      .insert(user)
+      .values({
+        id: userId,
+        name: entry.username,
+        email: `${entry.username}@password.example.invalid`,
+        emailVerified: false,
+        username: entry.username,
+        displayUsername: entry.username,
+      })
+      .onConflictDoNothing();
+    // 비밀번호 값이 바뀌어도 다시 seed하면 반영되게 갱신한다.
+    await db
+      .insert(account)
+      .values({
+        id: `${userId}-credential`,
+        accountId: userId,
+        providerId: "credential",
+        userId,
+        password: passwordHash,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: account.id,
+        set: { password: passwordHash, updatedAt: new Date() },
+      });
+  }
 
   const rows = Array.from({ length: 24 }, (_, index) => {
     const number = index + 1;

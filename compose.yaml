@@ -9,6 +9,7 @@ x-local-env: &local-env
   BETTER_AUTH_SECRET: local-only-change-before-any-nonlocal-use-0123456789
   DATABASE_URL: postgres://ax:ax@db:5432/ax_local
   FILE_ROOT: /data/files
+  LOCAL_FIXTURE_PASSWORD: local-fixture-pass-2026
   NEXT_TELEMETRY_DISABLED: '1'
 
 x-test-env: &test-env
@@ -20,6 +21,7 @@ x-test-env: &test-env
   BETTER_AUTH_SECRET: isolated-test-secret-012345678901234567890
   DATABASE_URL: postgres://ax:ax@test-db:5432/ax_e2e
   FILE_ROOT: /data/files
+  LOCAL_FIXTURE_PASSWORD: local-fixture-pass-2026
   NEXT_TELEMETRY_DISABLED: '1'
 
 services:

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { account } from "./auth-schema";
 import { db } from "../db";
 import { appUsers } from "../db/schema";
@@ -13,6 +13,8 @@ export class ApiError extends Error {
     super(message);
   }
 }
+
+export const PASSWORD_ISSUER = "local-password";
 
 const requestCorrelations = new WeakMap<Headers, string>();
 
@@ -59,18 +61,31 @@ export async function resolveRequestContext(
     .where(
       and(
         eq(account.userId, session.user.id),
-        eq(account.providerId, "local-oidc"),
+        inArray(account.providerId, ["local-oidc", "credential"]),
       ),
     )
     .limit(1);
   if (!linked) throw new ApiError(403, "FORBIDDEN", "업무 계정이 없습니다");
-  const issuer =
-    process.env.OIDC_ISSUER ?? "http://host.docker.internal:8090/default";
+  // 비밀번호 계정은 아이디로, OIDC 계정은 IdP subject로 업무 계정을 찾는다.
+  const identity =
+    linked.providerId === "credential"
+      ? { issuer: PASSWORD_ISSUER, subject: session.user.username ?? "" }
+      : {
+          issuer:
+            process.env.OIDC_ISSUER ??
+            "http://host.docker.internal:8090/default",
+          subject: linked.accountId,
+        };
+  if (!identity.subject)
+    throw new ApiError(403, "FORBIDDEN", "업무 계정이 없습니다");
   const [row] = await db
     .select()
     .from(appUsers)
     .where(
-      and(eq(appUsers.issuer, issuer), eq(appUsers.subject, linked.accountId)),
+      and(
+        eq(appUsers.issuer, identity.issuer),
+        eq(appUsers.subject, identity.subject),
+      ),
     )
     .limit(1);
   if (!row) throw new ApiError(403, "FORBIDDEN", "업무 계정이 없습니다");
