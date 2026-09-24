@@ -161,8 +161,7 @@ export async function createIsuScene(
   const renderer = new THREE.WebGLRenderer({
     canvas,
     alpha: false,
-    // ponytail: SwiftShader(소프트웨어 WebGL)에서 MSAA 비용이 커 로그인 상호작용을 지연시켜 끈다.
-    // 실제 GPU 환경에서 계단 현상이 거슬리면 antialias: true로 되돌린다.
+    // 장면은 MSAA 렌더 타깃에 그리고 캔버스에는 전체 화면 사각형만 그리므로 캔버스 자체 antialias는 끈다.
     antialias: false,
     powerPreference: "low-power",
   });

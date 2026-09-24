@@ -20,6 +20,8 @@ export default defineConfig({
         launchOptions: {
           args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
         },
+        // 로그인 장면 테스트만 실제 3D 장면이 필요하므로 기본값은 축소 모션으로 WebGL을 건너뛴다.
+        reducedMotion: "reduce",
       },
     },
   ],

@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { fixturePassword } from "./login";
 
+// 이 파일은 실제 3D 장면을 검증하므로 프로젝트 기본값(축소 모션)을 되돌린다.
+test.use({ reducedMotion: "no-preference" });
+
 const canvas = (page: Page) => page.locator(".loginScene canvas");
 const hasWebGL2 = (page: Page) =>
   page.evaluate(() =>
