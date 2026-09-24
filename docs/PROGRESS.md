@@ -43,6 +43,32 @@
 
 시각 증거는 로컬 [1366 화면](../output/playwright/admin-1366.png), [1440 화면](../output/playwright/admin-1440.png), [390 기본 화면](../output/playwright/admin-mobile-390.png), [입력 오류](../output/playwright/validation-error-1366.png), [충돌](../output/playwright/conflict-1366.png), [PDF 첫 페이지](../output/pdf/admin-first-65111e5f-a08b-4119-9882-2169fdef4c77.png), [PDF 마지막 페이지](../output/pdf/admin-last-65111e5f-a08b-4119-9882-2169fdef4c77.png)에 있다. `output/`은 로컬 검사 산출물이며 Git ignore 대상이다.
 
+## ISU 로그인 교체 (2026-09-25)
+
+설계: [ISU 로그인 설계](superpowers/specs/2026-09-24-isu-login-design.md). 계획: [구현 계획](superpowers/plans/2026-09-24-isu-login.md).
+
+| 범위 | 실제 확인 |
+| --- | --- |
+| 비밀번호 로그인 | hr-admin 24명, org-manager 12명, 틀린 비밀번호와 없는 아이디 같은 문구, inactive-user 업무 거부, 공개 가입 거부 |
+| SSO | 기존 OIDC e2e가 "SSO로 로그인" 버튼으로 통과 |
+| 3D 장면 | 텍스처 지연 중 로그인, WebGL 실패와 모션 감소 시 정지 이미지, 등장 완료 PASS |
+| 연출 | 입력 중 calm, 성공 시 share와 1.2초 내 이동, 슬로건 두 줄 상태 PASS |
+| 대비 | 슬로건 3:1 이상(e2e 단언 통과), 정확한 값 미기록. 패널 보조 글자 5.4:1(계산) |
+| 스크롤바 | 임의 스크롤 영역과 Grid 세로 스크롤 영역 12px |
+| 성능 | 텍스처 데스크톱 약 8MB, 모바일 약 1.5MB. SwiftShader 기준 1440x900 1.4fps, 1366x768 1.2fps, 390x844 2.8fps. 실제 GPU 기준은 미측정 |
+
+실행한 명령의 마지막 결과:
+
+- `pnpm check`: exit 0, format/lint/typecheck 통과, architecture 59개 소스 통과.
+- `pnpm test`: exit 0, 6개 파일 25개 테스트 통과.
+- `pnpm test:integration`: exit 0, 4개 파일 20개 테스트 통과.
+- `pnpm e2e`: exit 0, 32개 테스트 통과, skip 0.
+- `pnpm build`: exit 0. 기존에 알려진 fs 경로 동적 접근 Turbopack trace 경고 9건은 그대로다(신규 아님).
+
+첫 `pnpm e2e` 실행에서 `grid-interactions.spec.ts` 5개가 로그인 버튼을 찾지 못해 타임아웃으로 실패했다. Docker Desktop의 빌드 컨텍스트 동기화 지연으로 테스트 이미지에 병합 전 코드가 남아 있었던 것이 원인이었다. `docker compose --profile local build --no-cache tools`와 `docker compose --profile test build --no-cache`로 재빌드한 뒤 컨테이너를 다시 만들어 전체 검사를 재실행했고, 위에 기록한 결과는 이 재실행의 최종 값이다. 애플리케이션 코드, 테스트, 타임아웃은 바꾸지 않았다.
+
+캡처: `output/playwright-test/login/login-1440x900.png`, `login-1366x768.png`, `login-390x844.png`.
+
 ## 구현 중 확인해 해결한 문제
 
 - 계획 후보 OIDC 이미지 `3.1.4`가 registry에 없어 실제 게시된 3.x `3.0.3`으로 고정했다.
