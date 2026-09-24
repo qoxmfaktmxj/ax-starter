@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function signInWithFixture(page: Page, subject: string) {
   await page.goto("/login");
-  await page.getByRole("button", { name: "테스트 계정으로 로그인" }).click();
+  await page.getByRole("button", { name: "SSO로 로그인" }).click();
   const subjectInput = page.getByPlaceholder("Enter any user/subject");
   await expect(subjectInput).toBeVisible();
   await subjectInput.fill(subject);

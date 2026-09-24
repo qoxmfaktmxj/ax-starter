@@ -5,7 +5,7 @@ const employeeId = "00000000-0000-4000-8000-000000000001";
 
 async function signIn(page: Page) {
   await page.goto("/login");
-  await page.getByRole("button", { name: "테스트 계정으로 로그인" }).click();
+  await page.getByRole("button", { name: "SSO로 로그인" }).click();
   await page.getByPlaceholder("Enter any user/subject").fill("hr-admin");
   await page.getByRole("button", { name: "Sign-in" }).click();
   await page.waitForURL("**/employees");

@@ -16,7 +16,7 @@ docker compose --profile local run --rm seed
 docker compose --profile local up -d web worker
 ```
 
-브라우저에서 [로컬 로그인](http://host.docker.internal:3000/login)을 연다. 테스트 로그인 화면의 subject에 `hr-admin` 또는 `org-manager`를 입력한다. `inactive-user`와 등록되지 않은 subject는 로그인 후에도 업무 접근이 거부된다. 초기 데이터는 A/B 조직 각 12명이다. 첨부의 다운로드 가능 상태를 시험하려면 [고정 가상 PNG](tests/fixtures/local-allowed.png)를 올린다. 일반 업로드는 검사기가 없으므로 격리된다.
+브라우저에서 [로컬 로그인](http://host.docker.internal:3000/login)을 연다. 아이디 `hr-admin` 또는 `org-manager`와 compose의 `LOCAL_FIXTURE_PASSWORD` 값(로컬 기본 `local-fixture-pass-2026`)으로 로그인한다. 아래의 'SSO로 로그인'은 로컬 OIDC fixture로 이동하며 subject에 같은 아이디를 입력한다. 두 방식의 계정은 서로 다른 업무 계정으로 감사에 기록된다. `inactive-user`와 등록되지 않은 subject는 로그인 후에도 업무 접근이 거부된다. 초기 데이터는 A/B 조직 각 12명이다. 첨부의 다운로드 가능 상태를 시험하려면 [고정 가상 PNG](tests/fixtures/local-allowed.png)를 올린다. 일반 업로드는 검사기가 없으므로 격리된다.
 
 서비스 상태와 로그:
 

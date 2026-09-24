@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { signInWithPassword } from "./login";
 
 // headless Chromium은 기본으로 스크롤바를 숨긴다. 실제 폭을 재기 위해 이 옵션만 끈다.
 test.use({ launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] } });
@@ -17,5 +18,20 @@ test("any scroll container uses the 12px custom scrollbar", async ({
     box.remove();
     return value;
   });
+  expect(gutter).toBe(12);
+});
+
+test("employee grid scroll area uses the same 12px scrollbar", async ({
+  page,
+}) => {
+  await signInWithPassword(page, "hr-admin");
+  await page.waitForURL("**/employees");
+  const viewport = page.locator(".ag-body-vertical-scroll-viewport");
+  await expect(viewport).toBeVisible();
+  const gutter = await viewport.evaluate(
+    (element) =>
+      (element as HTMLElement).offsetWidth -
+      (element as HTMLElement).clientWidth,
+  );
   expect(gutter).toBe(12);
 });

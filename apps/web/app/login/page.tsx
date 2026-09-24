@@ -1,16 +1,48 @@
 "use client";
 
-import { useState } from "react";
-import { BRAND_NAME } from "../../../../packages/core/brand";
-import "./login.css";
+import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { authClient } from "../../auth-client";
+import "./login.css";
+
+const INVALID_CREDENTIALS = "아이디 또는 비밀번호가 올바르지 않습니다.";
+const TOO_MANY_ATTEMPTS = "로그인 시도가 많습니다. 잠시 후 다시 시도해 주세요.";
+const UNREACHABLE =
+  "로그인 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 
 export default function LoginPage() {
-  const [pending, setPending] = useState(false);
+  const router = useRouter();
+  const [pending, setPending] = useState<"password" | "sso" | null>(null);
   const [error, setError] = useState("");
+  const [shared, setShared] = useState(false);
 
-  async function loginWithFixture() {
-    setPending(true);
+  async function signInWithPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setPending("password");
+    setError("");
+    try {
+      const result = await authClient.signIn.username({
+        username: String(form.get("username") ?? ""),
+        password: String(form.get("password") ?? ""),
+      });
+      if (result.error) {
+        setError(
+          result.error.status === 429 ? TOO_MANY_ATTEMPTS : INVALID_CREDENTIALS,
+        );
+        setPending(null);
+        return;
+      }
+      setShared(true);
+      router.push("/employees");
+    } catch {
+      setError(UNREACHABLE);
+      setPending(null);
+    }
+  }
+
+  async function signInWithSso() {
+    setPending("sso");
     setError("");
     try {
       const result = await authClient.signIn.social({
@@ -18,49 +50,70 @@ export default function LoginPage() {
         callbackURL: "/employees",
       });
       if (result.error)
-        setError(
-          "테스트 계정 로그인을 시작하지 못했습니다. 다시 시도해 주세요.",
-        );
+        setError("SSO 로그인을 시작하지 못했습니다. 다시 시도해 주세요.");
     } catch {
-      setError(
-        "테스트 계정 로그인에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      );
+      setError("SSO 로그인에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
-      setPending(false);
+      setPending(null);
     }
   }
 
   return (
-    <main className="loginPage">
-      <section className="loginIntro" aria-labelledby="loginTitle">
-        <p className="loginEyebrow">사내 업무 시스템 시작점</p>
-        <h1 id="loginTitle">{BRAND_NAME}</h1>
-        <p className="loginDescription">
-          현업의 요청을 검증 가능한 업무 시스템으로 연결합니다.
+    <main className="loginPage" data-shared={shared}>
+      <div className="loginScene" aria-hidden="true" />
+      <section className="loginBrand" aria-label="ISU 슬로건">
+        <p className="loginSlogan">
+          <span className="loginSloganChallenge">Challenge the Future</span>
+          <span className="loginSloganShare">Share the Future</span>
         </p>
       </section>
-
-      <section className="loginPanel" aria-labelledby="loginActionTitle">
-        <p className="loginEyebrow">EMPLOYEE WORKSPACE</p>
-        <h2 id="loginActionTitle">업무 공간에 들어가기</h2>
-        <p className="loginCopy">
-          테스트 계정으로 로그인해 사원관리 흐름을 확인할 수 있습니다.
-        </p>
+      <section className="loginPanel" aria-labelledby="loginTitle">
+        <p className="loginEyebrow">ISU 업무 시스템</p>
+        <h1 id="loginTitle">로그인</h1>
+        <form className="loginForm" onSubmit={signInWithPassword}>
+          <label className="loginField">
+            <span>아이디</span>
+            <input
+              name="username"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              required
+            />
+          </label>
+          <label className="loginField">
+            <span>비밀번호</span>
+            <input
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+            />
+          </label>
+          <button
+            className="loginButton"
+            type="submit"
+            disabled={pending !== null}
+          >
+            {pending === "password" ? "로그인 중..." : "로그인"}
+          </button>
+        </form>
         <button
-          className="loginButton"
+          className="loginSso"
           type="button"
-          onClick={loginWithFixture}
-          disabled={pending}
+          onClick={signInWithSso}
+          disabled={pending !== null}
         >
-          {pending ? "로그인 연결 중..." : "테스트 계정으로 로그인"}
+          {pending === "sso" ? "SSO 연결 중..." : "SSO로 로그인"}
         </button>
         <p className="loginNotice">
-          로컬 개발용 OIDC 테스트 계정입니다. 실제 사내 인증이나 운영 계정과
-          연결되지 않습니다.
+          로컬 테스트 계정 전용입니다. 실제 사내 인증과 연결되지 않습니다.
         </p>
-        <p className="loginStatus" role="status" aria-live="polite">
-          {error}
-        </p>
+        {error ? (
+          <p className="loginError" role="alert">
+            {error}
+          </p>
+        ) : null}
       </section>
     </main>
   );

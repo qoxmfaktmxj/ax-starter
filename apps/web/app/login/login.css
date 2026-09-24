@@ -1,114 +1,176 @@
-.loginPage {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
-  align-items: center;
-  gap: clamp(32px, 8vw, 120px);
-  width: min(1120px, 100%);
-  min-height: 100vh;
-  margin-inline: auto;
-  padding: clamp(28px, 7vw, 88px);
-  background: var(--color-surface);
+:root:has(.loginPage) {
+  --color-scrollbar-track: var(--color-login-sky-bottom);
 }
 
-.loginIntro {
-  max-width: 580px;
+.loginPage {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  align-items: center;
+  gap: clamp(24px, 6vw, 96px);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: clamp(24px, 5vw, 72px) clamp(24px, 7vw, 112px);
+  overflow-x: hidden;
+}
+
+.loginScene {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    var(--color-login-sky-top),
+    var(--color-login-sky-bottom)
+  );
+}
+
+.loginBrand {
+  align-self: end;
+  padding-bottom: 14vh;
+}
+
+.loginSlogan {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.375rem, 2.2vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.loginSloganChallenge {
+  color: var(--color-login-slogan-challenge);
+}
+
+.loginSloganShare {
+  color: var(--color-login-slogan-share);
+}
+
+.loginPanel {
+  width: 100%;
+  padding: clamp(24px, 3vw, 36px);
+  border: 1px solid var(--color-login-panel-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-login-panel);
+  box-shadow: var(--shadow-login-panel);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  backdrop-filter: blur(16px) saturate(1.2);
 }
 
 .loginEyebrow {
-  margin: 0 0 var(--space-3);
-  color: var(--color-text-muted);
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-on-subtle);
   font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: 0.08em;
 }
 
-.loginIntro h1 {
-  margin: 0;
+.loginPanel h1 {
+  margin: 0 0 var(--space-6);
   color: var(--color-text-login);
-  font-family: var(--font-display);
-  font-size: var(--font-size-display);
-  font-weight: 600;
-  letter-spacing: -0.055em;
-  line-height: 1.05;
-}
-
-.loginDescription {
-  max-width: 28rem;
-  margin: var(--space-4) 0 0;
-  color: var(--color-text-secondary, var(--color-text-on-subtle));
-  font-size: var(--font-size-lg);
-}
-
-.loginPanel {
-  width: 100%;
-  max-width: 420px;
-  padding: clamp(24px, 4vw, 40px);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel);
-  background: var(--color-surface);
-}
-
-.loginPanel h2 {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: var(--font-size-title);
+  font-weight: 700;
   letter-spacing: -0.025em;
 }
 
-.loginCopy {
-  margin: var(--space-2) 0 var(--space-6);
-  color: var(--color-text-muted);
+.loginForm {
+  display: grid;
+  gap: var(--space-4);
 }
 
-.loginButton {
-  width: 100%;
-  min-height: 44px;
-  padding: 10px var(--space-4);
-  border: 1px solid var(--color-action);
-  border-radius: var(--radius-control);
-  background: var(--color-action);
-  color: var(--color-action-text);
+.loginField {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
   font-weight: 600;
 }
 
-.loginButton:hover:not(:disabled) {
-  border-color: var(--color-action-hover);
-  background: var(--color-action-hover);
+.loginField input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  font-weight: 400;
 }
 
-.loginButton:disabled {
+.loginButton {
+  min-height: 44px;
+  margin-top: var(--space-2);
+  border: 1px solid var(--color-login-action);
+  border-radius: var(--radius-control);
+  background: var(--color-login-action);
+  color: var(--color-action-text);
+  font-weight: 700;
+}
+
+.loginButton:hover:not(:disabled) {
+  border-color: var(--color-login-action-hover);
+  background: var(--color-login-action-hover);
+}
+
+.loginButton:disabled,
+.loginSso:disabled {
   cursor: wait;
   opacity: 0.72;
 }
 
-.loginNotice {
-  margin: var(--space-3) 0 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
+.loginSso {
+  display: block;
+  margin: var(--space-4) auto 0;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  background: none;
+  color: var(--color-text-on-subtle);
+  font-size: var(--font-size-sm);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
-.loginStatus {
-  min-height: 1.5em;
+.loginNotice {
+  margin: var(--space-4) 0 0;
+  color: var(--color-text-on-subtle);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}
+
+/* 오류색은 흰 바탕에서만 4.5:1을 넘으므로 흰 상자 안에 둔다. */
+.loginError {
   margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-danger);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
   color: var(--color-danger);
   font-size: var(--font-size-sm);
+  font-weight: 600;
 }
 
-@media (max-width: 700px) {
+@media (max-width: 767px) {
   .loginPage {
     grid-template-columns: minmax(0, 1fr);
-    align-content: center;
-    gap: var(--space-6);
-    padding: var(--space-6) var(--space-4);
+    grid-template-rows: minmax(34vh, 1fr) auto;
+    align-items: stretch;
+    gap: var(--space-4);
+    padding: var(--space-4);
   }
 
-  .loginIntro h1 {
-    font-size: clamp(2.5rem, 14vw, 3.5rem);
+  .loginBrand {
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: 0;
+  }
+
+  .loginSlogan {
+    font-size: 1.25rem;
   }
 
   .loginPanel {
-    max-width: none;
-    padding: var(--space-4);
+    padding: var(--space-6) var(--space-4);
   }
 }
