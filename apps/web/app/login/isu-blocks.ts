@@ -95,15 +95,17 @@ function addIceSurface(shader: Shader, shared: IceShared) {
       vec3 blueDeep = diffuse * .6;
       vec3 blueLight = mix(diffuse, vec3(.75, .9, 1.), .45);
       vec3 stone = mix(blueDeep, blueLight, smoothstep(.15, .85, frostGrain * .6 + fineGrain * .25 + tint * .15));
+      float blotch = texture2D(map, vIceWorld.xy * .25 + vIceWorld.z * .11).b;
+      stone *= .88 + blotch * .24;
       float snowCover = smoothstep(.5, .9, vIceNormal.y) * (.55 + .45 * fineGrain);
       stone = mix(stone, uSnow, snowCover);
-      stone = mix(stone, vec3(.82, .94, 1.), smoothstep(.35, .9, wear) * .45);
+      stone = mix(stone, vec3(.86, .95, 1.), smoothstep(.2, .7, wear) * .5);
       diffuseColor.rgb = stone * mix(.3, 1., bakedAo);`,
     )
     .replace(
       "#include <roughnessmap_fragment>",
       `#include <roughnessmap_fragment>
-      roughnessFactor = mix(.42, .82, clamp(frostGrain * .7 + snowCover * .4, 0., 1.));`,
+      roughnessFactor = mix(.6, .95, clamp(frostGrain * .7 + snowCover * .4, 0., 1.));`,
     )
     .replace(
       "#include <emissivemap_fragment>",

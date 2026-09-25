@@ -25,7 +25,7 @@ const TUNE = {
   lookTarget: new THREE.Vector3(0.25, 1.35, 0),
   letterBaseY: -0.53,
   exposure: 0.95,
-  fog: { color: "#1b2840", near: 20, far: 80 },
+  fog: { color: "#131f33", near: 20, far: 80 },
   hemisphere: { sky: 0x6f88b5, ground: 0x0d1422, intensity: 0.9 },
   moon: {
     color: 0xbcd2ff,
@@ -41,17 +41,18 @@ const TUNE = {
   snow: new THREE.Color("#e6f2ff"),
   terrainColor: 0x8e9bb2,
   iceGlow: new THREE.Color(0.35, 0.62, 0.95),
+  coreColor: new THREE.Color(0.92, 0.96, 1),
   lime: new THREE.Color("#a0c840"),
   post: {
-    bloom: { strength: 0.55, radius: 0.45, threshold: 0.62 },
+    bloom: { strength: 0.6, radius: 0.4, threshold: 0.8 },
     ao: { radius: 0.35, intensity: 0.85 },
-    grade: { contrast: 1.08, vignette: 0.32, grain: 0.035, aberration: 0.0025 },
+    grade: { contrast: 1.12, vignette: 0.45, grain: 0.012, aberration: 0.002 },
   },
-  haze: { color: new THREE.Color("#22324d"), density: 0.5 },
-  glow: { core: 0.9, coreOpen: 2.2, ground: 0.35, groundOpen: 0.4, lime: 5 },
+  haze: { color: new THREE.Color("#22324d"), density: 0.8 },
+  glow: { core: 3.2, coreOpen: 3.0, ground: 0.8, groundOpen: 0.8, lime: 6 },
   pointerOrbit: { theta: 0.06, phi: 0.025 },
   desktop: { zoomPerAspect: 0.42, offsetX: 0.2, offsetY: 0.06 },
-  portrait: { zoomPerAspect: 0.95, offsetY: 0.28 },
+  portrait: { zoomPerAspect: 0.86, offsetY: 0.28 },
 };
 
 const hash = (x: number, y: number) => {
@@ -322,7 +323,10 @@ export async function createIsuScene(
       : createIceMaterial(maps, iceShared, TUNE.isuBlue);
     const mesh = new THREE.Mesh(geometries[index], material);
     const base = new THREE.Vector3(...spec.center);
-    // 손으로 쌓은 느낌을 주려고 블록마다 크기 +-6%, 기울기 +-3도 편차를 준다.
+    // 손으로 쌓은 느낌을 주려고 블록마다 위치 편차(블록 폭/높이의 6% 이내)를 준다.
+    base.x += (hash(index, 83) - 0.5) * spec.size[0] * 0.06;
+    base.y += (hash(index, 89) - 0.5) * spec.size[1] * 0.06;
+    // 블록마다 크기 +-6%, 기울기 +-3도 편차를 준다.
     mesh.scale.setScalar(1 + (hash(index, 41) - 0.5) * 0.12);
     const rotation =
       spec.rotation + (hash(index, 53) - 0.5) * THREE.MathUtils.degToRad(6);
@@ -334,12 +338,13 @@ export async function createIsuScene(
       mesh,
       material,
       base,
-      // 글자 가운데에서 조금 바깥으로, 주로 카메라 쪽으로 벌어진다.
-      outward: base
-        .clone()
-        .sub(letterCenters.get(spec.letter)!)
-        .multiplyScalar(0.35)
-        .add(new THREE.Vector3(0, 0, 0.9)),
+      // 글자 가운데에서 조금 바깥으로, 위로, 카메라 쪽으로 벌어진다.
+      outward: new THREE.Vector3()
+        .subVectors(base, letterCenters.get(spec.letter)!)
+        .setZ(0)
+        .normalize()
+        .multiplyScalar(spec.size[0] * 0.22)
+        .add(new THREE.Vector3(0, spec.size[1] * 0.1, 0.3)),
       rotation,
       reach: courseFactor(spec.course),
       dot: spec.dot,
@@ -372,7 +377,7 @@ export async function createIsuScene(
     .forEach((block, rank, order) => {
       block.delay = (rank / (order.length - 1)) * (1 - LANDING_SPAN);
     });
-  const cores = createGlowCores(layout, TUNE.iceGlow);
+  const cores = createGlowCores(layout, TUNE.coreColor);
   letters.add(cores.mesh);
   groundGlow = createGroundGlow(
     9,
@@ -472,10 +477,10 @@ export async function createIsuScene(
         vec2 direction=motion.xy*clip.w-clip.xy*motion.w;
         vDirection=normalize(vec2(direction.x,-direction.y));
         gl_Position=clip;
-        gl_PointSize=clamp(94.*uPixelRatio*(.65+fract(variation*13.37)*.70)/-mv.z,1.,14.);
+        gl_PointSize=clamp(64.*uPixelRatio*(.65+fract(variation*13.37)*.70)/-mv.z,1.,14.);
         float edges=smoothstep(0.,.8,p.y)*(1.-smoothstep(13.,14.,p.y));
         edges*=(1.-smoothstep(16.,18.,abs(p.x)))*(1.-smoothstep(16.,18.,abs(p.z)));
-        vOpacity=(1.-smoothstep(12.,38.,-mv.z))*smoothstep(.6,2.5,-mv.z)*edges*(.55+variation*.25);
+        vOpacity=(1.-smoothstep(12.,38.,-mv.z))*smoothstep(.6,2.5,-mv.z)*edges*(.55+variation*.25)*.75;
       }`,
     fragmentShader: `varying float vOpacity;varying vec2 vDirection;
       void main(){vec2 p=(gl_PointCoord-.5)*2.;float along=dot(p,vDirection),across=dot(p,vec2(-vDirection.y,vDirection.x));float a=1.-smoothstep(.10,1.,length(vec2(across*2.,along)));gl_FragColor=vec4(.94,.97,1.,a*vOpacity);}`,
@@ -636,7 +641,7 @@ export async function createIsuScene(
       );
       block.target = THREE.MathUtils.lerp(
         block.target,
-        local * (0.28 + hash(block.id, 7) * 0.22),
+        local * (0.8 + hash(block.id, 7) * 0.4),
         1 - Math.exp(-delta * 3.7),
       );
       block.amount = THREE.MathUtils.lerp(
@@ -652,10 +657,10 @@ export async function createIsuScene(
         .lerp(block.base, land)
         .addScaledVector(block.outward, spread);
       block.mesh.rotation.set(
-        spread * Math.sin(block.id) * 0.5 + (1 - land) * block.spin,
-        spread * Math.cos(block.id * 0.9) * 0.5,
+        spread * Math.sin(block.id) * 0.14 + (1 - land) * block.spin,
+        spread * Math.cos(block.id * 0.9) * 0.14,
         block.rotation +
-          spread * Math.sin(block.id * 0.7) * 0.4 +
+          spread * Math.sin(block.id * 0.7) * 0.1 +
           (1 - land) * block.spin * 0.5,
       );
       const lit = shareIntensity(
@@ -668,14 +673,9 @@ export async function createIsuScene(
           .copy(TUNE.lime)
           .multiplyScalar(0.35 + breath * 0.25 + lit * 0.8);
       else {
-        const glow = THREE.MathUtils.smoothstep(
-          Math.max(block.amount, block.idle),
-          0.02,
-          0.2,
-        );
+        // 벌어질 때 면은 밝아지지 않는다. 밝아지는 것은 심과 바닥 빛뿐이다.
         block.material.emissive
-          .copy(TUNE.iceGlow)
-          .multiplyScalar(glow * 0.6)
+          .set(0, 0, 0)
           .lerp(shareColor.copy(TUNE.lime).multiplyScalar(1.3), lit);
       }
       if (local > 0.2) hover = true;
@@ -712,7 +712,7 @@ export async function createIsuScene(
             distance: block.base.distanceTo(dampedCursor),
           };
         });
-      const shown = pickHudPoints(candidates);
+      const shown = pickHudPoints(candidates, 7, 3.4);
       drawHud(hudContext, shown, hudAlpha, hudScale);
       hudCanvas.dataset.points = String(hudAlpha > 0.5 ? shown.length : 0);
     }
