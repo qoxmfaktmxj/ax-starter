@@ -1,8 +1,4 @@
 import * as THREE from "three";
-import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import {
   createDotCore,
   createDotShellMaterial,
@@ -12,6 +8,7 @@ import {
 import { createGlowCores, createGroundGlow } from "./isu-glow";
 import { createIsuLandscape } from "./isu-landscape";
 import { buildIsuLayout } from "./isu-layout";
+import { applyHaze, createPostChain } from "./isu-post";
 import {
   courseFactor,
   createLoginMotion,
@@ -44,7 +41,12 @@ const TUNE = {
   terrainColor: 0x8e9bb2,
   iceGlow: new THREE.Color(0.35, 0.62, 0.95),
   lime: new THREE.Color("#a0c840"),
-  bloom: { strength: 0.35, radius: 0.4, threshold: 0.72 },
+  post: {
+    bloom: { strength: 0.55, radius: 0.45, threshold: 0.62 },
+    ao: { radius: 0.35, intensity: 0.85 },
+    grade: { contrast: 1.08, vignette: 0.32, grain: 0.035, aberration: 0.0025 },
+  },
+  haze: { color: new THREE.Color("#22324d"), density: 0.5 },
   glow: { core: 0.9, coreOpen: 2.2, ground: 0.35, groundOpen: 0.4, lime: 5 },
   pointerOrbit: { theta: 0.06, phi: 0.025 },
   desktop: { zoomPerAspect: 0.42, offsetX: 0.2, offsetY: 0.06 },
@@ -209,6 +211,10 @@ export async function createIsuScene(
   }
   // 지형 셰이더에 직접 주입하는 바닥 빛. 블록/dot 레이아웃이 준비된 뒤 아래에서 만든다.
   let groundGlow: ReturnType<typeof createGroundGlow>;
+  const haze = {
+    color: { value: TUNE.haze.color.clone() },
+    density: { value: TUNE.haze.density },
+  };
   const terrainMaterial = new THREE.MeshStandardMaterial({
     color: TUNE.terrainColor,
     map: terrainMap,
@@ -244,6 +250,7 @@ export async function createIsuScene(
       diffuseColor.rgb = snowSurface * mix(vec3(.38,.43,.56), vec3(1.10,1.13,1.18), smoothstep(-.12,.78,windFacing));`,
     );
     groundGlow.applyToShader(shader);
+    applyHaze(shader, haze);
   };
   const terrainSegments = mobile ? 180 : 300;
   const terrainGeometry = new THREE.PlaneGeometry(
@@ -477,21 +484,7 @@ export async function createIsuScene(
   snow.frustumCulled = false;
   scene.add(snow);
 
-  const renderTarget = new THREE.WebGLRenderTarget(1, 1, {
-    type: THREE.HalfFloatType,
-    samples: mobile ? 0 : Math.min(2, renderer.capabilities.maxSamples),
-  });
-  const composer = new EffectComposer(renderer, renderTarget);
-  composer.addPass(new RenderPass(scene, camera));
-  composer.addPass(
-    new UnrealBloomPass(
-      new THREE.Vector2(1, 1),
-      TUNE.bloom.strength,
-      TUNE.bloom.radius,
-      TUNE.bloom.threshold,
-    ),
-  );
-  composer.addPass(new OutputPass());
+  const post = createPostChain(renderer, scene, camera, TUNE.post, { mobile });
 
   const motion = createLoginMotion();
   let sharePending: (() => void) | null = null;
@@ -533,7 +526,7 @@ export async function createIsuScene(
     }
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
-    composer.setSize(width, height);
+    post.setSize(width, height);
     landscape.resize(canvas.width, canvas.height);
   };
 
@@ -689,7 +682,7 @@ export async function createIsuScene(
     limeLight.intensity =
       TUNE.glow.lime * (0.7 + breath * 0.3) * (1 + frame.share);
     snowMaterial.uniforms.uTime.value = time;
-    composer.render();
+    post.render(time);
     if (shaderFailed)
       throw new Error("ISU 장면의 셰이더를 컴파일하지 못했습니다.");
     if (sharePending && frame.share >= 1) {
@@ -746,8 +739,7 @@ export async function createIsuScene(
       snowMaterial.dispose();
       for (const texture of textures) texture.dispose();
       moon.shadow.map?.dispose();
-      composer.passes.forEach((pass) => pass.dispose());
-      composer.dispose();
+      post.dispose();
       renderer.dispose();
     },
   };
