@@ -33,6 +33,7 @@ export type IceShared = {
   snow: { value: THREE.Color };
   seam: { value: number };
   seamColor: { value: THREE.Color };
+  tint: { value: number };
 };
 
 type IceMaps = { frost: THREE.Texture; bump: THREE.Texture };
@@ -76,6 +77,7 @@ function addIceSurface(
   shader.uniforms.uSnow = shared.snow;
   shader.uniforms.uSeam = shared.seam;
   shader.uniforms.uSeamColor = shared.seamColor;
+  shader.uniforms.uIceTint = shared.tint;
   shader.uniforms.uIceHalf = { value: half };
   shader.uniforms.uIceSides = { value: new THREE.Vector4(...sides) };
   shader.vertexShader = shader.vertexShader
@@ -94,7 +96,7 @@ function addIceSurface(
   shader.fragmentShader = shader.fragmentShader
     .replace(
       "#include <common>",
-      "#include <common>\nuniform vec3 uIceGlow; uniform vec3 uSnow; uniform float uSeam; uniform vec3 uSeamColor; uniform vec3 uIceHalf; uniform vec4 uIceSides; varying vec4 vIceBake; varying vec3 vIceWorld; varying vec3 vIceNormal; varying vec3 vIceLocal;",
+      "#include <common>\nuniform vec3 uIceGlow; uniform vec3 uSnow; uniform float uSeam; uniform vec3 uSeamColor; uniform float uIceTint; uniform vec3 uIceHalf; uniform vec4 uIceSides; varying vec4 vIceBake; varying vec3 vIceWorld; varying vec3 vIceNormal; varying vec3 vIceLocal;",
     )
     .replace(
       "#include <map_fragment>",
@@ -124,6 +126,7 @@ function addIceSurface(
       `#include <emissivemap_fragment>
       float frostRim = pow(1. - max(0., dot(normalize(vNormal), normalize(vViewPosition))), 4.);
       totalEmissiveRadiance += uIceGlow * (frostRim * .08 * bakedAo + wear * wear * .12);
+      totalEmissiveRadiance += diffuse * uIceTint * mix(.4, 1., bakedAo);
       float seamReach = uIceHalf.y * .18;
       float spill = max(
         max(uIceSides.x * (1. - smoothstep(0., seamReach, vIceLocal.x + uIceHalf.x)),

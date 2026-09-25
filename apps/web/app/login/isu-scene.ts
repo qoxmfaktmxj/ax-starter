@@ -24,7 +24,7 @@ const TUNE = {
   camera: new THREE.Vector3(-3.2, 1.9, 13.6),
   lookTarget: new THREE.Vector3(0.25, 1.35, 0),
   letterBaseY: -0.53,
-  exposure: 0.6,
+  exposure: 0.8,
   fog: { color: "#131f33", near: 20, far: 80 },
   hemisphere: { sky: 0x6f88b5, ground: 0x0d1422, intensity: 0.9 },
   moon: {
@@ -42,6 +42,7 @@ const TUNE = {
   terrainColor: 0x8e9bb2,
   iceGlow: new THREE.Color(0.35, 0.62, 0.95),
   coreColor: new THREE.Color(0.85, 0.95, 1),
+  iceTint: 0.45,
   lime: new THREE.Color("#a0c840"),
   post: {
     bloom: { strength: 0.25, radius: 0.5, threshold: 1.1 },
@@ -219,6 +220,7 @@ export async function createIsuScene(
     snow: { value: TUNE.snow.clone() },
     seam: { value: TUNE.glow.spill },
     seamColor: { value: TUNE.coreColor.clone() },
+    tint: { value: TUNE.iceTint },
   };
   const maps = { frost, bump };
 
