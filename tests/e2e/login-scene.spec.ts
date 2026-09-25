@@ -136,6 +136,10 @@ test("slogan lines, calm and share follow the scene and the sign-in", async ({
 
   await page.getByLabel("아이디").fill("hr-admin");
   await page.getByLabel("비밀번호").fill(fixturePassword());
+  // 컨테이너에서는 렌더링이 느려 CSS 전환이 끝나지 않으므로 이 검사에서만 전환을 끈다.
+  await page.addStyleTag({
+    content: ".loginSloganShare { transition: none !important; }",
+  });
   await page.getByRole("button", { name: "로그인", exact: true }).click();
   await expect(page.locator(".loginPage")).toHaveAttribute(
     "data-shared",
