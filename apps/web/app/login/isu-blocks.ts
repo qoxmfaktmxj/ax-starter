@@ -92,9 +92,9 @@ function addIceSurface(shader: Shader, shared: IceShared) {
       float tint = vIceBake.b;
       float frostGrain = texture2D(map, vMapUv * 2.0).r;
       float fineGrain = texture2D(map, vIceWorld.xy * .9 + vIceWorld.z * .37).g;
-      vec3 blueDeep = diffuseColor.rgb * .45;
-      vec3 blueLight = mix(diffuseColor.rgb, vec3(.72, .9, 1.), .3);
-      vec3 stone = mix(blueDeep, blueLight, smoothstep(.2, .85, frostGrain * .6 + fineGrain * .25 + tint * .15));
+      vec3 blueDeep = diffuse * .6;
+      vec3 blueLight = mix(diffuse, vec3(.75, .9, 1.), .45);
+      vec3 stone = mix(blueDeep, blueLight, smoothstep(.15, .85, frostGrain * .6 + fineGrain * .25 + tint * .15));
       float snowCover = smoothstep(.5, .9, vIceNormal.y) * (.55 + .45 * fineGrain);
       stone = mix(stone, uSnow, snowCover);
       stone = mix(stone, vec3(.82, .94, 1.), smoothstep(.35, .9, wear) * .45);
