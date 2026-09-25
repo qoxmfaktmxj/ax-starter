@@ -4,8 +4,12 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { createIsuLandscape } from "./isu-landscape";
-import { buildIsuLayout, type ArcBlock, type BoxBlock } from "./isu-layout";
-import { createLoginMotion, shareIntensity } from "./login-motion";
+import { buildIsuLayout, type BlockSpec } from "./isu-layout";
+import {
+  courseFactor,
+  createLoginMotion,
+  shareIntensity,
+} from "./login-motion";
 
 // 랜딩 arctic-scene.ts의 지형, 눈, 서리 재질, 윤곽선 등장을 가져와 이글루 대신 ISU 블록을 세운다.
 // 구도와 조명은 캡처를 보며 TUNE 값만 조정한다.
@@ -116,34 +120,10 @@ function frostUvOf(geometry: THREE.BufferGeometry) {
   return new THREE.BufferAttribute(frostUv, 2);
 }
 
-function boxGeometry(spec: BoxBlock) {
+function blockGeometry(spec: BlockSpec) {
   const geometry = roundedFrostBox();
   geometry.setAttribute("frostUv", frostUvOf(geometry));
   geometry.scale(spec.size[0], spec.size[1], spec.size[2]);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-function arcGeometry(spec: ArcBlock) {
-  const geometry = roundedFrostBox();
-  geometry.setAttribute("frostUv", frostUvOf(geometry));
-  const positions = geometry.attributes.position;
-  const [inner, outer] = spec.radii;
-  const [a0, a1] = spec.angles;
-  const [ox, oy] = spec.origin;
-  for (let i = 0; i < positions.count; i++) {
-    const u = positions.getX(i) + 0.5;
-    const v = positions.getY(i) + 0.5;
-    // 끝 각도에서 시작 각도로 펼쳐야 면의 앞뒤가 뒤집히지 않는다(랜딩 entranceBlock과 같은 규칙).
-    const angle = THREE.MathUtils.lerp(a1, a0, u);
-    const radius = THREE.MathUtils.lerp(inner, outer, v);
-    positions.setXYZ(
-      i,
-      ox + Math.cos(angle) * radius - spec.center[0],
-      oy + Math.sin(angle) * radius - spec.center[1],
-      positions.getZ(i) * spec.depth,
-    );
-  }
   geometry.computeVertexNormals();
   return geometry;
 }
@@ -422,12 +402,10 @@ export async function createIsuScene(
   const blocks = layout.map((spec, index) => {
     const material = makeIce(spec.dot);
     if (spec.dot) material.emissive.copy(TUNE.lime).multiplyScalar(0.9);
-    const mesh = new THREE.Mesh(
-      spec.kind === "box" ? boxGeometry(spec) : arcGeometry(spec),
-      material,
-    );
+    const mesh = new THREE.Mesh(blockGeometry(spec), material);
     const base = new THREE.Vector3(...spec.center);
     mesh.position.copy(base);
+    mesh.rotation.z = spec.rotation;
     mesh.castShadow = mesh.receiveShadow = true;
     letters.add(mesh);
     return {
@@ -440,6 +418,8 @@ export async function createIsuScene(
         .sub(letterCenters.get(spec.letter)!)
         .multiplyScalar(0.35)
         .add(new THREE.Vector3(0, 0, 0.9)),
+      rotation: spec.rotation,
+      reach: courseFactor(spec.course),
       dot: spec.dot,
       id: index + 1,
       amount: 0,
@@ -674,7 +654,7 @@ export async function createIsuScene(
     let hover = false;
     for (const block of blocks) {
       const distance = block.base.distanceTo(dampedCursor);
-      const heightGate = THREE.MathUtils.smoothstep(block.base.y, 0.45, 1.0);
+      const heightGate = block.reach;
       const local =
         (1 - THREE.MathUtils.smoothstep(distance, 0.8, 2.4)) *
         heightGate *
@@ -716,7 +696,7 @@ export async function createIsuScene(
       block.mesh.rotation.set(
         spread * Math.sin(block.id) * 0.5,
         spread * Math.cos(block.id * 0.9) * 0.5,
-        spread * Math.sin(block.id * 0.7) * 0.4,
+        block.rotation + spread * Math.sin(block.id * 0.7) * 0.4,
       );
       const lit = shareIntensity(
         frame.share,

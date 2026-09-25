@@ -51,3 +51,18 @@ export function shareIntensity(
   const front = progress * (maxDistance + 1);
   return Math.min(1, Math.max(0, front - distance));
 }
+
+// 맨 아래 단 블록은 바닥에 붙어 있으므로 절반만 움직인다.
+export function courseFactor(course: number) {
+  return course === 0 ? 0.5 : 1;
+}
+
+// 등장 때 블록 하나가 날아와 앉는 곡선. delay 뒤 LANDING_SPAN 동안 0에서 1로 가며 끝에서 살짝 튄다.
+export const LANDING_SPAN = 0.45;
+
+export function landing(progress: number, delay: number) {
+  const t = Math.min(1, Math.max(0, (progress - delay) / LANDING_SPAN));
+  if (t === 0) return 0;
+  const overshoot = 1.70158;
+  return 1 + (overshoot + 1) * (t - 1) ** 3 + overshoot * (t - 1) ** 2;
+}

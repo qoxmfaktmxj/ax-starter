@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  courseFactor,
   createLoginMotion,
+  landing,
+  LANDING_SPAN,
   SHAKE_SECONDS,
   SHARE_SECONDS,
   shareIntensity,
@@ -41,5 +44,21 @@ describe("login motion", () => {
     expect(shareIntensity(0.1, 0, 6)).toBeGreaterThan(0);
     expect(shareIntensity(0.1, 6, 6)).toBe(0);
     expect(shareIntensity(1, 6, 6)).toBe(1);
+  });
+
+  it("halves the reach of the bottom course", () => {
+    expect(courseFactor(0)).toBe(0.5);
+    expect(courseFactor(1)).toBe(1);
+    expect(courseFactor(5)).toBe(1);
+  });
+
+  it("lands each block after its delay with a small overshoot", () => {
+    expect(landing(0.1, 0.2)).toBe(0);
+    expect(landing(0.2 + LANDING_SPAN, 0.2)).toBeCloseTo(1, 6);
+    let peak = 0;
+    for (let progress = 0.2; progress <= 0.2 + LANDING_SPAN; progress += 0.01)
+      peak = Math.max(peak, landing(progress, 0.2));
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThan(1.12);
   });
 });

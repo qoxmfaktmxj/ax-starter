@@ -1,183 +1,178 @@
-// ISU 글자를 얼음 블록으로 쌓는 배치. 월드 단위이며 글자 바닥이 y=0, 전체 가운데가 x=0이다.
+// ISU 글자를 로고(introduction_logo.jpg, 306x67) 실측대로 얼음 블록으로 쌓는다.
+// 로고 좌표는 픽셀 가장자리 기준이며 x는 오른쪽, y는 아래로 커진다. 글자 윗선 y=14, 바닥 y=67.
 export type Letter = "i" | "s" | "u";
+export type Corner = "none" | "tl" | "tr" | "bl" | "br";
 export type Vec3 = [number, number, number];
 
-export type BoxBlock = {
-  kind: "box";
+export type BlockSpec = {
   letter: Letter;
   dot: boolean;
+  /** 0이 맨 아래 단 */
+  course: number;
   center: Vec3;
+  /** 회전 전 폭, 높이, 두께 */
   size: Vec3;
+  /** z축 회전(라디안) */
+  rotation: number;
+  /** 로고에서 크게 둥근 바깥 모서리 */
+  corner: Corner;
 };
 
-export type ArcBlock = {
-  kind: "arc";
-  letter: Letter;
-  dot: false;
-  /** 원호 중심 (x, y) */
-  origin: [number, number];
-  /** 안쪽, 바깥쪽 반지름 */
-  radii: [number, number];
-  /** 시작, 끝 각도(라디안). 시작 < 끝 */
-  angles: [number, number];
-  depth: number;
-  /** 중간 반지름과 중간 각도의 점 */
-  center: Vec3;
-};
+export const LETTER_HEIGHT = 3.1;
+export const BLOCK_DEPTH = 0.7;
+export const BLOCK_GAP = 0.06;
+const LOGO_TOP = 14;
+const LOGO_BOTTOM = 67;
+const PX = LETTER_HEIGHT / (LOGO_BOTTOM - LOGO_TOP);
 
-export type BlockSpec = BoxBlock | ArcBlock;
+const worldX = (x: number) => x * PX;
+const worldY = (y: number) => (LOGO_BOTTOM - y) * PX;
 
-const COURSE = 0.62;
-const GAP = 0.03;
-const DEPTH = 0.7;
-const S_STROKE = 0.7;
-const U_STROKE = 0.8;
-const LETTER_GAP = 0.5;
-export const LETTER_HEIGHT = 5 * COURSE;
+type Box = { x0: number; x1: number; y0: number; y1: number };
 
-const degrees = (value: number) => (value * Math.PI) / 180;
-
-function box(
+function block(
   letter: Letter,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
+  course: number,
+  box: Box,
+  corner: Corner = "none",
   dot = false,
-): BoxBlock {
+): BlockSpec {
   return {
-    kind: "box",
     letter,
     dot,
-    center: [x, y, 0],
-    size: [width, height, DEPTH],
+    course,
+    corner,
+    rotation: 0,
+    center: [worldX((box.x0 + box.x1) / 2), worldY((box.y0 + box.y1) / 2), 0],
+    size: [
+      (box.x1 - box.x0) * PX - BLOCK_GAP,
+      (box.y1 - box.y0) * PX - BLOCK_GAP,
+      BLOCK_DEPTH,
+    ],
   };
 }
 
-function arc(
+// 세로로 count개 쌓는다. 아래 블록부터 firstCourse, firstCourse + 1 ...
+function column(
   letter: Letter,
-  origin: [number, number],
-  outer: number,
-  stroke: number,
-  from: number,
-  to: number,
-  pieces: number,
-): ArcBlock[] {
-  const inner = outer - stroke;
-  const radius = (inner + outer) / 2;
-  const span = (to - from) / pieces;
-  // 블록 사이 틈을 중간 반지름 기준 각도로 바꾼다.
-  const pad = GAP / 2 / radius;
-  return Array.from({ length: pieces }, (_, index): ArcBlock => {
-    const start = from + index * span;
-    const middle = start + span / 2;
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number,
+  count: number,
+  firstCourse: number,
+): BlockSpec[] {
+  const step = (y1 - y0) / count;
+  return Array.from({ length: count }, (_, index) => {
+    const bottom = y1 - step * index;
+    return block(letter, firstCourse + index, {
+      x0,
+      x1,
+      y0: bottom - step,
+      y1: bottom,
+    });
+  });
+}
+
+// 가로로 count개 늘어놓는다. 양 끝 블록에 둥근 모서리를 줄 수 있다.
+function row(
+  letter: Letter,
+  course: number,
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number,
+  count: number,
+  ends: { first?: Corner; last?: Corner } = {},
+): BlockSpec[] {
+  const step = (x1 - x0) / count;
+  return Array.from({ length: count }, (_, index) => {
+    const corner =
+      index === 0 ? ends.first : index === count - 1 ? ends.last : undefined;
+    return block(
+      letter,
+      course,
+      { x0: x0 + step * index, x1: x0 + step * (index + 1), y0, y1 },
+      corner ?? "none",
+    );
+  });
+}
+
+// 두 점을 잇는 획을 count개의 기울인 블록으로 나눈다. 위쪽 블록일수록 단 번호가 크다.
+function stroke(
+  letter: Letter,
+  from: [number, number],
+  to: [number, number],
+  thickness: number,
+  count: number,
+  topCourse: number,
+): BlockSpec[] {
+  const dx = worldX(to[0]) - worldX(from[0]);
+  const dy = worldY(to[1]) - worldY(from[1]);
+  const length = Math.hypot(dx, dy);
+  const rotation = Math.atan2(dy, dx);
+  return Array.from({ length: count }, (_, index): BlockSpec => {
+    const t = (index + 0.5) / count;
     return {
-      kind: "arc",
       letter,
       dot: false,
-      origin,
-      radii: [inner, outer],
-      angles: [start + pad, start + span - pad],
-      depth: DEPTH,
-      center: [
-        origin[0] + Math.cos(middle) * radius,
-        origin[1] + Math.sin(middle) * radius,
-        0,
+      course: topCourse - index,
+      corner: "none",
+      rotation,
+      center: [worldX(from[0]) + dx * t, worldY(from[1]) + dy * t, 0],
+      size: [
+        length / count - BLOCK_GAP,
+        thickness * PX - BLOCK_GAP,
+        BLOCK_DEPTH,
       ],
     };
   });
 }
 
 export function blockBounds(spec: BlockSpec): { min: Vec3; max: Vec3 } {
-  if (spec.kind === "box") {
-    const [x, y, z] = spec.center;
-    const [width, height, depth] = spec.size;
-    return {
-      min: [x - width / 2, y - height / 2, z - depth / 2],
-      max: [x + width / 2, y + height / 2, z + depth / 2],
-    };
-  }
+  const [cx, cy, cz] = spec.center;
+  const [width, height, depth] = spec.size;
+  const cos = Math.cos(spec.rotation);
+  const sin = Math.sin(spec.rotation);
   const xs: number[] = [];
   const ys: number[] = [];
-  for (let step = 0; step <= 8; step++) {
-    const angle =
-      spec.angles[0] + ((spec.angles[1] - spec.angles[0]) * step) / 8;
-    for (const radius of spec.radii) {
-      xs.push(spec.origin[0] + Math.cos(angle) * radius);
-      ys.push(spec.origin[1] + Math.sin(angle) * radius);
-    }
+  for (const [sx, sy] of [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ]) {
+    const x = (sx * width) / 2;
+    const y = (sy * height) / 2;
+    xs.push(cx + x * cos - y * sin);
+    ys.push(cy + x * sin + y * cos);
   }
   return {
-    min: [Math.min(...xs), Math.min(...ys), -spec.depth / 2],
-    max: [Math.max(...xs), Math.max(...ys), spec.depth / 2],
+    min: [Math.min(...xs), Math.min(...ys), cz - depth / 2],
+    max: [Math.max(...xs), Math.max(...ys), cz + depth / 2],
   };
 }
 
 export function buildIsuLayout(): BlockSpec[] {
-  const blocks: BlockSpec[] = [];
-
-  // i: 5단 기둥과 간격을 둔 점 하나
-  const iWidth = 0.9;
-  for (let course = 0; course < 5; course++)
-    blocks.push(
-      box("i", iWidth / 2, COURSE * (course + 0.5), iWidth - GAP, COURSE - GAP),
-    );
-  blocks.push(
-    box("i", iWidth / 2, LETTER_HEIGHT + 0.3 + 0.41, 0.82, 0.82, true),
-  );
-
-  // s: 위아래 원이 가운데 획을 공유한다. 위 원은 오른쪽 위 끝에서, 아래 원은 왼쪽 아래 끝에서 끝난다.
-  const sOuter = (LETTER_HEIGHT + S_STROKE) / 4;
-  const sCenterX = iWidth + LETTER_GAP + sOuter;
-  blocks.push(
-    ...arc(
-      "s",
-      [sCenterX, LETTER_HEIGHT - sOuter],
-      sOuter,
-      S_STROKE,
-      degrees(20),
-      degrees(270),
-      7,
-    ),
-    ...arc(
-      "s",
-      [sCenterX, sOuter],
-      sOuter,
-      S_STROKE,
-      degrees(-160),
-      degrees(90),
-      7,
-    ),
-  );
-
-  // u: 양쪽 3단 기둥과 바닥 반원
-  const uOuter = LETTER_HEIGHT - 3 * COURSE;
-  const uLeft = sCenterX + sOuter + LETTER_GAP;
-  const uCenterX = uLeft + uOuter;
-  for (const x of [uLeft + U_STROKE / 2, uCenterX + uOuter - U_STROKE / 2])
-    for (let course = 0; course < 3; course++)
-      blocks.push(
-        box(
-          "u",
-          x,
-          uOuter + COURSE * (course + 0.5),
-          U_STROKE - GAP,
-          COURSE - GAP,
-        ),
-      );
-  blocks.push(
-    ...arc(
-      "u",
-      [uCenterX, uOuter],
-      uOuter,
-      U_STROKE,
-      degrees(180),
-      degrees(360),
+  const blocks: BlockSpec[] = [
+    // I: 기둥 5단과, 기둥 윗부분 왼쪽 위에 모서리가 맞닿는 초록 큐브
+    ...column("i", 15, 30, LOGO_TOP, LOGO_BOTTOM, 5, 0),
+    block(
+      "i",
       5,
+      { x0: 0, x1: 15, y0: LOGO_TOP - 15, y1: LOGO_TOP },
+      "none",
+      true,
     ),
-  );
-
-  // 전체 폭의 가운데를 x=0으로 옮긴다.
+    // S: 윗막대(왼쪽 위 둥금), 대각선 획, 아랫막대(오른쪽 아래 둥금)
+    ...row("s", 4, 42, 76, 14, 28, 3, { first: "tl" }),
+    ...stroke("s", [51, 32], [66.5, 50.5], 16, 3, 3),
+    ...row("s", 0, 42, 77, 53, 67, 3, { last: "br" }),
+    // U: 두 기둥과 양쪽 아래가 둥근 바닥
+    ...column("u", 88, 103, LOGO_TOP, 51, 4, 1),
+    ...column("u", 112, 127, LOGO_TOP, 51, 4, 1),
+    ...row("u", 0, 88, 127, 51, 67, 3, { first: "bl", last: "br" }),
+  ];
   const bounds = blocks.map(blockBounds);
   const shift =
     -(
@@ -185,13 +180,9 @@ export function buildIsuLayout(): BlockSpec[] {
       Math.max(...bounds.map((value) => value.max[0]))
     ) / 2;
   return blocks.map(
-    (block): BlockSpec =>
-      block.kind === "box"
-        ? { ...block, center: [block.center[0] + shift, block.center[1], 0] }
-        : {
-            ...block,
-            origin: [block.origin[0] + shift, block.origin[1]],
-            center: [block.center[0] + shift, block.center[1], 0],
-          },
+    (spec): BlockSpec => ({
+      ...spec,
+      center: [spec.center[0] + shift, spec.center[1], spec.center[2]],
+    }),
   );
 }
