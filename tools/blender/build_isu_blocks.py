@@ -22,9 +22,11 @@ import bpy
 from mathutils import Vector, noise
 
 VOXEL = 0.028  # 리메시 해상도(월드 단위)
-BEVEL = 0.035  # 작은 모서리 깎기(날카롭지만 부드럽게)
-LUMP = 0.012  # 면의 미세한 굴곡(평평함을 유지)
-CHIP_MIN = 2  # 블록당 코너 이 빠진 자국 최소 개수
+BEVEL_MIN = 0.025  # 블록별 모서리 깎기 범위(최소)
+BEVEL_MAX = 0.05  # 블록별 모서리 깎기 범위(최대), 손으로 깎은 듯 블록마다 다르게
+LUMP_LOW = 0.03  # 저주파 굴곡(큰 완만한 융기/패임)
+LUMP_HIGH = 0.01  # 고주파 굴곡(작은 곰보 자국)
+CHIP_MIN = 1  # 블록당 코너 이 빠진 자국 최소 개수
 CHIP_MAX = 3  # 블록당 코너 이 빠진 자국 최대 개수
 WEAR_GAIN = 6.0  # 곡률을 마모 값으로 바꾸는 배율
 CORNER_SIGN = {"tl": (-1, 1), "tr": (1, 1), "bl": (-1, -1), "br": (1, -1)}
@@ -158,7 +160,8 @@ def quality_check(bm, half):
 def sculpt(obj, spec, seed):
     width, height, depth = spec["size"]
     bevel = obj.modifiers.new("bevel", "BEVEL")
-    bevel.width = BEVEL
+    # 블록마다 손으로 깎은 듯 모서리 깎기 폭을 다르게 한다(시드로 결정론적).
+    bevel.width = random.Random(seed).uniform(BEVEL_MIN, BEVEL_MAX)
     bevel.segments = 3
     bevel.limit_method = "ANGLE"
     bevel.angle_limit = math.radians(40)
@@ -187,11 +190,17 @@ def sculpt(obj, spec, seed):
                 - 1.0,
             ),
         )
-        # 낮은 주파수로 살짝만 굴곡을 준다. 평평함을 유지한다.
-        lump = max(-1.5, min(1.5, noise.fractal(p * 1.6 + offset, 0.9, 2.0, 4))) * LUMP
+        # 두 겹 굴곡: 저주파(큰 완만한 융기/패임)와 고주파(작은 곰보 자국)를 더한다.
+        lump_low = (
+            max(-1.5, min(1.5, noise.fractal(p * 1.2 + offset, 0.9, 2.0, 3))) * LUMP_LOW
+        )
+        lump_high = (
+            max(-1.5, min(1.5, noise.fractal(p * 5.0 + offset * 1.7, 0.7, 2.1, 3)))
+            * LUMP_HIGH
+        )
         # 모서리 근처에만 고주파 잔부스러기를 더한다.
         crumble = noise.noise(p * 18.0 + offset) * 0.006 * edge
-        moves.append((vert, vert.normal.copy() * (lump + crumble)))
+        moves.append((vert, vert.normal.copy() * (lump_low + lump_high + crumble)))
     for vert, move in moves:
         vert.co += move
     bm.normal_update()
