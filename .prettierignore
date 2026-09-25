@@ -1,0 +1,3 @@
+# three examples/jsm/libs/draco/gltf, copied verbatim (see apps/web/public/models/provenance.json)
+apps/web/public/draco/draco_decoder.js
+apps/web/public/draco/draco_wasm_wrapper.js

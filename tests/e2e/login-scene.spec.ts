@@ -217,3 +217,17 @@ test("slogan keeps 3:1 contrast against the scene behind it", async ({
   );
   for (const ratio of ratios) expect(ratio).toBeGreaterThanOrEqual(3);
 });
+
+test("a missing block model falls back to the still image", async ({
+  page,
+}) => {
+  await page.route("**/models/isu-blocks.glb", (route) => route.abort());
+  await page.goto("/login");
+  await expect(canvas(page)).toHaveAttribute("data-ready", "false", {
+    timeout: 30_000,
+  });
+  await expect
+    .poll(() => sceneBackground(page))
+    .toContain("login-still-desktop.webp");
+  await expect(page.getByLabel("아이디")).toBeEditable();
+});

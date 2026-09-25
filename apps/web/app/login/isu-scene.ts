@@ -3,8 +3,14 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import {
+  createDotCore,
+  createDotShellMaterial,
+  createIceMaterial,
+  loadBlockGeometries,
+} from "./isu-blocks";
 import { createIsuLandscape } from "./isu-landscape";
-import { buildIsuLayout, type BlockSpec } from "./isu-layout";
+import { buildIsuLayout } from "./isu-layout";
 import {
   courseFactor,
   createLoginMotion,
@@ -30,7 +36,8 @@ const TUNE = {
     intensity: 0.45,
     position: new THREE.Vector3(5, 3, -8),
   },
-  iceColor: 0xc6dcf2,
+  isuBlue: new THREE.Color("#0090d0"),
+  snow: new THREE.Color("#e6f2ff"),
   terrainColor: 0x8e9bb2,
   iceGlow: new THREE.Color(0.35, 0.62, 0.95),
   lime: new THREE.Color("#a0c840"),
@@ -94,41 +101,6 @@ const terrainHeight = (x: number, z: number) => {
   const flatten = THREE.MathUtils.smoothstep(Math.hypot(x * 0.55, z), 2.8, 11);
   return (hills + middle + detail - 0.34) * flatten - 0.51;
 };
-
-function roundedFrostBox() {
-  // 면마다 격자를 남겨 볼록한 모서리를 실제 형상으로 만든다.
-  const geometry = new THREE.BoxGeometry(1, 1, 1, 18, 14, 10);
-  const positions = geometry.attributes.position;
-  const point = new THREE.Vector3();
-  const core = new THREE.Vector3();
-  for (let i = 0; i < positions.count; i++) {
-    point.fromBufferAttribute(positions, i);
-    core.copy(point).clampScalar(-0.35, 0.35);
-    point.sub(core).normalize().multiplyScalar(0.15).add(core);
-    positions.setXYZ(i, point.x, point.y, point.z);
-  }
-  return geometry;
-}
-
-function frostUvOf(geometry: THREE.BufferGeometry) {
-  const positions = geometry.attributes.position;
-  const frostUv = new Float32Array(positions.count * 2);
-  for (let i = 0; i < positions.count; i++) {
-    frostUv[i * 2] = positions.getX(i) + 0.5;
-    frostUv[i * 2 + 1] = positions.getY(i) + 0.5;
-  }
-  return new THREE.BufferAttribute(frostUv, 2);
-}
-
-function blockGeometry(spec: BlockSpec) {
-  const geometry = roundedFrostBox();
-  geometry.setAttribute("frostUv", frostUvOf(geometry));
-  geometry.scale(spec.size[0], spec.size[1], spec.size[2]);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-type Shader = Parameters<THREE.MeshStandardMaterial["onBeforeCompile"]>[0];
 
 export async function createIsuScene(
   canvas: HTMLCanvasElement,
@@ -216,93 +188,14 @@ export async function createIsuScene(
     texture.repeat.set(2.4, 2.4);
   }
 
-  // 등장: 윤곽선만 보이다가 재질이 위에서 아래로 차오른다.
+  // 등장 진행과 블록 발광은 모든 블록 재질이 함께 쓰는 값이다.
   const reveal = { value: 1 };
-  const addMaterialReveal = (shader: Shader) => {
-    shader.uniforms.uIceReveal = reveal;
-    shader.vertexShader = `varying vec2 vRevealUv; varying float vRevealY;\n${shader.vertexShader}`;
-    shader.vertexShader = shader.vertexShader.replace(
-      "#include <begin_vertex>",
-      "#include <begin_vertex>\nvRevealUv = uv; vRevealY = (modelMatrix * vec4(transformed, 1.)).y;",
-    );
-    shader.fragmentShader = `uniform float uIceReveal; varying vec2 vRevealUv; varying float vRevealY;\n${shader.fragmentShader}`;
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <tonemapping_fragment>",
-      `
-      if (uIceReveal < 1.) {
-        float scanHeight = mix(4.5, -.8, uIceReveal);
-        float solid = smoothstep(scanHeight - .12, scanHeight + .12, vRevealY);
-        float border = min(min(vRevealUv.x, vRevealUv.y), min(1. - vRevealUv.x, 1. - vRevealUv.y));
-        float outline = 1. - smoothstep(.0, max(fwidth(border) * 1.5, .008), border);
-        if (solid < .01 && outline < .15) discard;
-        vec3 wire = vec3(.85, 1., 1.1) * pow(outline, .3);
-        gl_FragColor.rgb = mix(wire, gl_FragColor.rgb, solid);
-        float scanLight = 1. - smoothstep(.02, .24, abs(vRevealY - scanHeight));
-        gl_FragColor.rgb += vec3(.7, .85, 1.) * scanLight * .9;
-      }
-      #include <tonemapping_fragment>`,
-    );
+  const iceShared = {
+    reveal,
+    glow: { value: TUNE.iceGlow.clone() },
+    snow: { value: TUNE.snow.clone() },
   };
-
-  const iceGlow = { value: TUNE.iceGlow };
-  const iceShader = (shader: Shader, isDot: boolean) => {
-    shader.uniforms.uIceGlow = iceGlow;
-    shader.vertexShader = shader.vertexShader
-      .replace(
-        "#include <common>",
-        "#include <common>\nattribute vec2 frostUv; varying vec2 vFrostCoord;",
-      )
-      .replace(
-        "#include <begin_vertex>",
-        "#include <begin_vertex>\nvFrostCoord = frostUv;",
-      );
-    const tint = isDot
-      ? "diffuseColor.rgb *= .85 + frostGrain * .3;"
-      : `float frostAlbedo = clamp(dot(diffuseColor.rgb, vec3(.299, .587, .114)) * 3.1, .18, .68);
-      diffuseColor.rgb = mix(vec3(.93, 1.0, 1.10) * frostAlbedo, vec3(.76, .84, .94), frostBorder * .22);`;
-    const innerGlow = isDot
-      ? ""
-      : "totalEmissiveRadiance += uIceGlow * (.08 + pow(frostBorder, 3.0) * .12);";
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        "#include <common>",
-        "#include <common>\nuniform vec3 uIceGlow; varying vec2 vFrostCoord;",
-      )
-      .replace(
-        "#include <map_fragment>",
-        `#include <map_fragment>
-      float frostGrain = texture2D(map, vMapUv * 2.0).r;
-      float frostBorder = smoothstep(.37, .50, max(abs(vFrostCoord.x - .5), abs(vFrostCoord.y - .5)) + (frostGrain - .5) * .045);
-      ${tint}`,
-      )
-      .replace(
-        "#include <roughnessmap_fragment>",
-        `#include <roughnessmap_fragment>
-      roughnessFactor = mix(.58, .84, clamp(frostGrain * .8 + frostBorder * .4, 0., 1.));`,
-      )
-      .replace(
-        "#include <emissivemap_fragment>",
-        `#include <emissivemap_fragment>
-      float frostRim = pow(1.0 - max(0.0, dot(normalize(vNormal), normalize(vViewPosition))), 5.0);
-      totalEmissiveRadiance += vec3(.63, .76, .94) * (frostRim * .09 + pow(frostBorder, 3.0) * .06);
-      ${innerGlow}`,
-      );
-    addMaterialReveal(shader);
-  };
-  // 블록마다 재질을 따로 둬서 벌어짐 빛과 성공 빛을 emissive로 블록별로 준다.
-  const makeIce = (isDot: boolean) => {
-    const material = new THREE.MeshStandardMaterial({
-      color: isDot ? TUNE.lime : TUNE.iceColor,
-      map: frost,
-      normalMap: bump,
-      normalScale: new THREE.Vector2(0.28, 0.28),
-      roughness: 0.72,
-      metalness: 0,
-    });
-    material.onBeforeCompile = (shader) => iceShader(shader, isDot);
-    material.customProgramCacheKey = () => (isDot ? "isu-dot" : "isu-ice");
-    return material;
-  };
+  const maps = { frost, bump };
 
   terrainMap.colorSpace = THREE.SRGBColorSpace;
   for (const texture of [terrainMap, terrainBump]) {
@@ -383,6 +276,14 @@ export async function createIsuScene(
   letters.position.y = TUNE.letterBaseY;
   scene.add(letters);
   const layout = buildIsuLayout();
+  // 블렌더로 만든 블록 형태. 불러오지 못하면 렌더러를 정리하고 정지 이미지로 넘어간다.
+  let geometries: THREE.BufferGeometry[];
+  try {
+    geometries = await loadBlockGeometries(layout.length, signal);
+  } catch (error) {
+    renderer.dispose();
+    throw error;
+  }
   const letterCenters = new Map<string, THREE.Vector3>();
   for (const letter of ["i", "s", "u"] as const) {
     const members = layout.filter((spec) => spec.letter === letter);
@@ -400,13 +301,18 @@ export async function createIsuScene(
     ...layout.find((spec) => spec.dot)!.center,
   );
   const blocks = layout.map((spec, index) => {
-    const material = makeIce(spec.dot);
-    if (spec.dot) material.emissive.copy(TUNE.lime).multiplyScalar(0.9);
-    const mesh = new THREE.Mesh(blockGeometry(spec), material);
+    const material = spec.dot
+      ? createDotShellMaterial(maps, iceShared, TUNE.lime)
+      : createIceMaterial(maps, iceShared, TUNE.isuBlue);
+    const mesh = new THREE.Mesh(geometries[index], material);
     const base = new THREE.Vector3(...spec.center);
+    // 손으로 쌓은 느낌을 주려고 블록마다 크기 +-6%, 기울기 +-3도 편차를 준다.
+    mesh.scale.setScalar(1 + (hash(index, 41) - 0.5) * 0.12);
+    const rotation =
+      spec.rotation + (hash(index, 53) - 0.5) * THREE.MathUtils.degToRad(6);
     mesh.position.copy(base);
-    mesh.rotation.z = spec.rotation;
-    mesh.castShadow = mesh.receiveShadow = true;
+    mesh.rotation.z = rotation;
+    mesh.castShadow = mesh.receiveShadow = !spec.dot;
     letters.add(mesh);
     return {
       mesh,
@@ -418,7 +324,7 @@ export async function createIsuScene(
         .sub(letterCenters.get(spec.letter)!)
         .multiplyScalar(0.35)
         .add(new THREE.Vector3(0, 0, 0.9)),
-      rotation: spec.rotation,
+      rotation,
       reach: courseFactor(spec.course),
       dot: spec.dot,
       id: index + 1,
@@ -428,6 +334,9 @@ export async function createIsuScene(
       shareDistance: base.distanceTo(dotCenter),
     };
   });
+  const dotSpec = layout.find((spec) => spec.dot)!;
+  const dotCore = createDotCore(dotSpec, TUNE.lime);
+  blocks.find((block) => block.dot)!.mesh.add(dotCore.mesh);
   const maxShareDistance = Math.max(
     ...blocks.map((block) => block.shareDistance),
   );
@@ -616,6 +525,8 @@ export async function createIsuScene(
     introLines.rotation.y = (1 - materialize) * 0.12;
 
     const frame = motion.update(delta);
+    // 초록 큐브는 약 3초 주기로 숨 쉬듯 밝아졌다 어두워진다.
+    const breath = 0.5 + 0.5 * Math.sin((time * Math.PI * 2) / 3);
     // 입력 중에는 카메라 추적과 블록 움직임을 약하게 한다.
     const follow = 1 - frame.calm * 0.7;
     const ease = 1 - Math.exp(-delta * 2.15);
@@ -704,7 +615,9 @@ export async function createIsuScene(
         maxShareDistance,
       );
       if (block.dot)
-        block.material.emissive.copy(TUNE.lime).multiplyScalar(0.9 + lit * 0.8);
+        block.material.emissive
+          .copy(TUNE.lime)
+          .multiplyScalar(0.35 + breath * 0.25 + lit * 0.8);
       else {
         const glow = THREE.MathUtils.smoothstep(
           Math.max(block.amount, block.idle),
@@ -719,6 +632,7 @@ export async function createIsuScene(
       if (local > 0.2) hover = true;
     }
 
+    dotCore.setIntensity(1.6 + breath * 0.8 + frame.share * 1.2);
     snowMaterial.uniforms.uTime.value = time;
     composer.render();
     if (shaderFailed)
@@ -770,6 +684,7 @@ export async function createIsuScene(
           object.geometry.dispose();
       });
       for (const block of blocks) block.material.dispose();
+      dotCore.dispose();
       terrainMaterial.dispose();
       snowMaterial.dispose();
       for (const texture of textures) texture.dispose();

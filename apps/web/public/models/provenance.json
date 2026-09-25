@@ -6,5 +6,6 @@
   "external_assets": false,
   "compression": "KHR_draco_mesh_compression",
   "attributes": "position, normal, uv, color (R=AO, G=edge wear, B=per-block tint)",
-  "note": "Block shapes are generated procedurally by the script. No models, textures or code from third-party sites are included."
+  "note": "Block shapes are generated procedurally by the script. No models, textures or code from third-party sites are included.",
+  "decoder": "apps/web/public/draco/* copied from three 0.183.2 examples/jsm/libs/draco/gltf (MIT via three)"
 }
