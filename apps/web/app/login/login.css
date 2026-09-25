@@ -65,6 +65,7 @@
 
 .loginSloganShare {
   color: var(--color-login-slogan-share);
+  opacity: 0.35;
 }
 
 .loginSloganChallenge,
@@ -74,15 +75,27 @@
     transform 600ms ease;
 }
 
-/* 장면이 살아 있으면 등장이 끝날 때 Challenge, 로그인 성공 때 Share를 보인다. */
+/* 장면이 살아 있으면 등장이 끝날 때 Challenge는 선명하게, Share는 옅게 보인다. 로그인 성공 때 Share가 진해진다. */
 .loginPage:has(canvas[data-preview="true"]) .loginSloganChallenge,
 .loginPage:has(canvas[data-preview="true"]) .loginSloganShare {
   opacity: 0;
   transform: translateY(6px);
 }
 
-.loginPage:has(canvas[data-intro="complete"]) .loginSloganChallenge,
+.loginPage:has(canvas[data-intro="complete"]) .loginSloganChallenge {
+  opacity: 1;
+  transform: none;
+}
+
+.loginPage:has(canvas[data-intro="complete"]) .loginSloganShare {
+  opacity: 0.35;
+  transform: none;
+}
+
+/* 장면이 매 프레임 캔버스 속성을 바꾸는 동안에는 전환 타임라인이 프레임에 묶여 멈출 수 있어, 로그인 성공 시에는 바로 값을 확정한다. */
+.loginPage[data-shared="true"] .loginSloganShare,
 .loginPage[data-shared="true"]:has(canvas) .loginSloganShare {
+  transition: none;
   opacity: 1;
   transform: none;
 }

@@ -100,14 +100,14 @@ const opacity = (page: Page, selector: string) =>
     .locator(selector)
     .evaluate((element) => getComputedStyle(element).opacity);
 
-test("a static scene shows both slogan lines from the start", async ({
+test("a static scene shows Challenge fully and Share faintly", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/login");
   await expect(canvas(page)).toHaveAttribute("data-ready", "static");
   expect(await opacity(page, ".loginSloganChallenge")).toBe("1");
-  expect(await opacity(page, ".loginSloganShare")).toBe("1");
+  expect(await opacity(page, ".loginSloganShare")).toBe("0.35");
 });
 
 test("slogan lines, calm and share follow the scene and the sign-in", async ({
@@ -124,11 +124,14 @@ test("slogan lines, calm and share follow the scene and the sign-in", async ({
     timeout: 90_000,
   });
   await expect.poll(() => opacity(page, ".loginSloganChallenge")).toBe("1");
-  expect(await opacity(page, ".loginSloganShare")).toBe("0");
+  await expect.poll(() => opacity(page, ".loginSloganShare")).toBe("0.35");
 
   await page.getByLabel("아이디").focus();
+  // 컨테이너의 소프트웨어 렌더링은 초당 1프레임 안팎이라 calm이 차오를 시간을 넉넉히 준다.
   await expect
-    .poll(async () => Number(await canvas(page).getAttribute("data-calm")))
+    .poll(async () => Number(await canvas(page).getAttribute("data-calm")), {
+      timeout: 60_000,
+    })
     .toBeGreaterThan(0.9);
 
   await page.getByLabel("아이디").fill("hr-admin");
@@ -138,6 +141,13 @@ test("slogan lines, calm and share follow the scene and the sign-in", async ({
     "data-shared",
     "true",
   );
+  // 성공하면 Share가 진해진다. 이동은 최대 1.2초 뒤라 그 전에 확인한다.
+  await expect
+    .poll(() => opacity(page, ".loginSloganShare"), {
+      timeout: 1_100,
+      intervals: [50],
+    })
+    .toBe("1");
   await page.waitForURL("**/employees", { timeout: 15_000 });
 });
 
