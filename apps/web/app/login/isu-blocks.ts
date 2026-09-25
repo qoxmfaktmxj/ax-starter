@@ -104,14 +104,14 @@ function addIceSurface(
       float tint = vIceBake.b;
       float frostGrain = texture2D(map, vMapUv * 2.0).r;
       float fineGrain = texture2D(map, vIceWorld.xy * .9 + vIceWorld.z * .37).g;
-      vec3 blueDeep = diffuse * .6;
-      vec3 blueLight = mix(diffuse, vec3(.75, .9, 1.), .45);
+      vec3 blueDeep = diffuse * .55;
+      vec3 blueLight = mix(diffuse, vec3(.45, .75, 1.), .25);
       vec3 stone = mix(blueDeep, blueLight, smoothstep(.15, .85, frostGrain * .6 + fineGrain * .25 + tint * .15));
       float blotch = texture2D(map, vIceWorld.xy * .25 + vIceWorld.z * .11).b;
       stone *= .88 + blotch * .24;
       float snowCover = smoothstep(.5, .9, vIceNormal.y) * (.55 + .45 * fineGrain);
-      stone = mix(stone, uSnow, snowCover);
-      stone = mix(stone, vec3(.86, .95, 1.), smoothstep(.2, .7, wear) * .5);
+      stone = mix(stone, uSnow, snowCover * .6);
+      stone = mix(stone, vec3(.8, .92, 1.), smoothstep(.25, .75, wear) * .3);
       diffuseColor.rgb = stone * mix(.3, 1., bakedAo);`,
     )
     .replace(
@@ -123,8 +123,8 @@ function addIceSurface(
       "#include <emissivemap_fragment>",
       `#include <emissivemap_fragment>
       float frostRim = pow(1. - max(0., dot(normalize(vNormal), normalize(vViewPosition))), 4.);
-      totalEmissiveRadiance += uIceGlow * (frostRim * .16 * bakedAo + wear * wear * .12);
-      float seamReach = uIceHalf.y * .4;
+      totalEmissiveRadiance += uIceGlow * (frostRim * .08 * bakedAo + wear * wear * .12);
+      float seamReach = uIceHalf.y * .18;
       float spill = max(
         max(uIceSides.x * (1. - smoothstep(0., seamReach, vIceLocal.x + uIceHalf.x)),
             uIceSides.y * (1. - smoothstep(0., seamReach, uIceHalf.x - vIceLocal.x))),
