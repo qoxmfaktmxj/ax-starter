@@ -98,7 +98,7 @@ export function createGlowCores(specs: BlockSpec[], color: THREE.Color) {
     // 틈마다 밝기를 다르게 해 같은 두께의 LED 막대처럼 보이지 않게 한다.
     mesh.setColorAt(
       index,
-      new THREE.Color().setScalar(0.6 + hash(index, 15) * 0.4),
+      new THREE.Color().setScalar(0.4 + hash(index, 15) * 0.6),
     );
   });
   mesh.instanceMatrix.needsUpdate = true;
