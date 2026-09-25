@@ -9,11 +9,14 @@ import {
   createIceMaterial,
   loadBlockGeometries,
 } from "./isu-blocks";
+import { createGlowCores, createGroundGlow } from "./isu-glow";
 import { createIsuLandscape } from "./isu-landscape";
 import { buildIsuLayout } from "./isu-layout";
 import {
   courseFactor,
   createLoginMotion,
+  landing,
+  LANDING_SPAN,
   shareIntensity,
 } from "./login-motion";
 
@@ -42,6 +45,7 @@ const TUNE = {
   iceGlow: new THREE.Color(0.35, 0.62, 0.95),
   lime: new THREE.Color("#a0c840"),
   bloom: { strength: 0.35, radius: 0.4, threshold: 0.72 },
+  glow: { core: 0.9, coreOpen: 2.2, ground: 0.35, groundOpen: 0.4, lime: 5 },
   pointerOrbit: { theta: 0.06, phi: 0.025 },
   desktop: { zoomPerAspect: 0.42, offsetX: 0.2, offsetY: 0.06 },
   portrait: { zoomPerAspect: 0.95, offsetY: 0.28 },
@@ -332,11 +336,48 @@ export async function createIsuScene(
       target: 0,
       idle: 0,
       shareDistance: base.distanceTo(dotCenter),
+      course: spec.course,
+      // 등장 때 흩어진 위치에서 날아와 앉는다.
+      from: base
+        .clone()
+        .add(
+          new THREE.Vector3(
+            (hash(index, 61) - 0.5) * 3,
+            0.8 + hash(index, 67) * 1.6,
+            1 + hash(index, 71) * 2,
+          ),
+        ),
+      spin: (hash(index, 73) - 0.5) * 1.2,
+      delay: 0,
     };
   });
   const dotSpec = layout.find((spec) => spec.dot)!;
   const dotCore = createDotCore(dotSpec, TUNE.lime);
   blocks.find((block) => block.dot)!.mesh.add(dotCore.mesh);
+  // 아래 단부터, 같은 단은 왼쪽부터 차례로 날아와 앉는다. 마지막 블록이 진행 1에서 끝난다.
+  [...blocks]
+    .sort((a, b) => a.course - b.course || a.base.x - b.base.x)
+    .forEach((block, rank, order) => {
+      block.delay = (rank / (order.length - 1)) * (1 - LANDING_SPAN);
+    });
+  const cores = createGlowCores(layout, TUNE.iceGlow);
+  letters.add(cores.mesh);
+  const groundGlow = createGroundGlow(
+    9,
+    4,
+    dotSpec.center[0],
+    TUNE.iceGlow,
+    TUNE.lime,
+  );
+  groundGlow.mesh.position.set(0, 0.02, 0.4);
+  letters.add(groundGlow.mesh);
+  const limeLight = new THREE.PointLight(TUNE.lime, 0, 3.5, 2);
+  limeLight.position.set(
+    dotSpec.center[0],
+    dotSpec.center[1],
+    dotSpec.center[2] + 0.45,
+  );
+  letters.add(limeLight);
   const maxShareDistance = Math.max(
     ...blocks.map((block) => block.shareDistance),
   );
@@ -563,6 +604,7 @@ export async function createIsuScene(
     letters.position.x = frame.shake * 0.08;
 
     let hover = false;
+    let opened = 0;
     for (const block of blocks) {
       const distance = block.base.distanceTo(dampedCursor);
       const heightGate = block.reach;
@@ -598,16 +640,19 @@ export async function createIsuScene(
         block.target,
         1 - Math.exp(-delta * 3.7),
       );
-      const spread =
-        Math.max(block.amount, block.idle) +
-        (1 - materialize) * 0.13 * heightGate;
+      const land = landing(introProgress, block.delay);
+      const spread = Math.max(block.amount, block.idle);
+      opened = Math.max(opened, spread);
       block.mesh.position
-        .copy(block.base)
+        .copy(block.from)
+        .lerp(block.base, land)
         .addScaledVector(block.outward, spread);
       block.mesh.rotation.set(
-        spread * Math.sin(block.id) * 0.5,
+        spread * Math.sin(block.id) * 0.5 + (1 - land) * block.spin,
         spread * Math.cos(block.id * 0.9) * 0.5,
-        block.rotation + spread * Math.sin(block.id * 0.7) * 0.4,
+        block.rotation +
+          spread * Math.sin(block.id * 0.7) * 0.4 +
+          (1 - land) * block.spin * 0.5,
       );
       const lit = shareIntensity(
         frame.share,
@@ -633,6 +678,15 @@ export async function createIsuScene(
     }
 
     dotCore.setIntensity(1.6 + breath * 0.8 + frame.share * 1.2);
+    // 블록이 벌어질수록 심과 바닥 빛이 밝아진다.
+    const openness = THREE.MathUtils.smoothstep(opened, 0.02, 0.25);
+    cores.setIntensity(TUNE.glow.core + openness * TUNE.glow.coreOpen);
+    groundGlow.setIntensity(
+      TUNE.glow.ground + openness * TUNE.glow.groundOpen,
+      (0.35 + breath * 0.25) * (1 + frame.share),
+    );
+    limeLight.intensity =
+      TUNE.glow.lime * (0.7 + breath * 0.3) * (1 + frame.share);
     snowMaterial.uniforms.uTime.value = time;
     composer.render();
     if (shaderFailed)
@@ -685,6 +739,8 @@ export async function createIsuScene(
       });
       for (const block of blocks) block.material.dispose();
       dotCore.dispose();
+      cores.dispose();
+      groundGlow.dispose();
       terrainMaterial.dispose();
       snowMaterial.dispose();
       for (const texture of textures) texture.dispose();
