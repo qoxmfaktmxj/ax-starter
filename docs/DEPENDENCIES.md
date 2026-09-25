@@ -14,6 +14,7 @@
 | AG Grid Community, React     | 36.2.0, 36.2.0                                               | Enterprise 패키지 미도입                                                                                                            |
 | Base UI                      | 1.8.0                                                        | 일괄편집 이동 확인 Dialog에 사용                                                                                                    |
 | three                        | 0.183.2, @types/three 0.183.1                                | 로그인 3D 장면. 설치 manifest에서 MIT 확인. 텍스처는 Poly Haven CC0, 출처와 체크섬은 `apps/web/public/images/login/provenance.json` |
+| Blender                      | 5.2.1 LTS (빌드 도구)                                        | 로그인 블록 모델을 `tools/blender/build_isu_blocks.py`로 생성. GPL-3.0-or-later 도구이며 저장소와 이미지에는 포함하지 않는다. 산출물 GLB는 스크립트의 결과물이다 |
 | pg-boss                      | 12.33.0                                                      | 12.34.0은 설치 시점에 24시간 최소 공개 기간을 충족하지 않아 제외                                                                    |
 | ExcelJS, Playwright          | 4.4.0, 1.63.0                                                | 실제 xlsx, PDF 생성. Chromium 153.0.8010.12                                                                                         |
 | Vitest, ESLint               | 5.0.1, 9.39.1                                                | ESLint TypeScript 플러그인은 8.70.1로 TS6 peer 범위 확인                                                                            |

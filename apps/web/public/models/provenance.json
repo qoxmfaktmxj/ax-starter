@@ -1,0 +1,10 @@
+{
+  "file": "isu-blocks.glb",
+  "generator": "tools/blender/build_isu_blocks.py",
+  "blender": "5.2.1 LTS",
+  "input": "tools/blender/isu-layout.json (scripts/export-isu-layout.ts, buildIsuLayout())",
+  "external_assets": false,
+  "compression": "KHR_draco_mesh_compression",
+  "attributes": "position, normal, uv, color (R=AO, G=edge wear, B=per-block tint)",
+  "note": "Block shapes are generated procedurally by the script. No models, textures or code from third-party sites are included."
+}
