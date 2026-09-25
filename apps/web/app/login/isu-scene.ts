@@ -6,6 +6,7 @@ import {
   loadBlockGeometries,
 } from "./isu-blocks";
 import { createGlowCores, createGroundGlow } from "./isu-glow";
+import { drawHud, pickHudPoints, type HudPoint } from "./isu-hud";
 import { createIsuLandscape } from "./isu-landscape";
 import { buildIsuLayout } from "./isu-layout";
 import { applyHaze, createPostChain } from "./isu-post";
@@ -111,6 +112,7 @@ const terrainHeight = (x: number, z: number) => {
 export async function createIsuScene(
   canvas: HTMLCanvasElement,
   signal: AbortSignal,
+  hudCanvas: HTMLCanvasElement | null = null,
 ) {
   if (signal.aborted)
     throw new DOMException("Scene initialization cancelled", "AbortError");
@@ -497,6 +499,10 @@ export async function createIsuScene(
   const interactionPlane = new THREE.Plane();
   const shareColor = new THREE.Color();
   let frames = 0;
+  const hudContext = hudCanvas?.getContext("2d") ?? null;
+  const hudScale = Math.min(window.devicePixelRatio, 2);
+  const projected = new THREE.Vector3();
+  let hudAlpha = 0;
 
   const resize = () => {
     const width = canvas.clientWidth;
@@ -528,6 +534,10 @@ export async function createIsuScene(
     renderer.setSize(width, height, false);
     post.setSize(width, height);
     landscape.resize(canvas.width, canvas.height);
+    if (hudCanvas) {
+      hudCanvas.width = Math.round(width * hudScale);
+      hudCanvas.height = Math.round(height * hudScale);
+    }
   };
 
   const render = (time: number, delta: number, assetsReady: boolean) => {
@@ -681,6 +691,31 @@ export async function createIsuScene(
     );
     limeLight.intensity =
       TUNE.glow.lime * (0.7 + breath * 0.3) * (1 + frame.share);
+    if (hudContext && hudCanvas) {
+      hudAlpha = THREE.MathUtils.lerp(
+        hudAlpha,
+        pointer.x !== 2 && introFinished ? 1 : 0,
+        1 - Math.exp(-delta * 4),
+      );
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const candidates: HudPoint[] = blocks
+        .filter((block) => !block.dot)
+        .map((block) => {
+          projected.copy(block.mesh.position);
+          letters.localToWorld(projected);
+          projected.project(camera);
+          return {
+            id: block.id,
+            x: (projected.x * 0.5 + 0.5) * width,
+            y: (-projected.y * 0.5 + 0.5) * height,
+            distance: block.base.distanceTo(dampedCursor),
+          };
+        });
+      const shown = pickHudPoints(candidates);
+      drawHud(hudContext, shown, hudAlpha, hudScale);
+      hudCanvas.dataset.points = String(hudAlpha > 0.5 ? shown.length : 0);
+    }
     snowMaterial.uniforms.uTime.value = time;
     post.render(time);
     if (shaderFailed)
@@ -722,6 +757,7 @@ export async function createIsuScene(
       });
     },
     dispose() {
+      hudContext?.clearRect(0, 0, hudCanvas!.width, hudCanvas!.height);
       sharePending?.();
       sharePending = null;
       introGeometry.dispose();

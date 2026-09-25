@@ -13,7 +13,7 @@ async function openScene(page: Page) {
   await page.waitForFunction(
     () =>
       document
-        .querySelector(".loginScene canvas")
+        .querySelector(".loginScene .loginSceneCanvas")
         ?.getAttribute("data-intro") === "complete",
     undefined,
     { timeout: 180_000 },
@@ -63,7 +63,7 @@ try {
             ".loginBrand, .loginPanel { visibility: hidden !important; }",
         });
         const png = await page
-          .locator(".loginScene canvas")
+          .locator(".loginScene .loginSceneCanvas")
           .screenshot({ timeout: 180_000 });
         const webp = await toWebp(page, png);
         await writeFile(join(stillDir, shot.name), webp);
@@ -83,7 +83,7 @@ try {
       const page = await browser.newPage({ viewport: { width, height } });
       try {
         await openScene(page);
-        const canvas = page.locator(".loginScene canvas");
+        const canvas = page.locator(".loginScene .loginSceneCanvas");
         const before = Number(await canvas.getAttribute("data-frames"));
         await page.waitForTimeout(5_000);
         const after = Number(await canvas.getAttribute("data-frames"));
