@@ -24,7 +24,7 @@ from mathutils import Vector, noise
 VOXEL = 0.028  # 리메시 해상도(월드 단위)
 BEVEL_MIN = 0.025  # 블록별 모서리 깎기 범위(최소)
 BEVEL_MAX = 0.05  # 블록별 모서리 깎기 범위(최대), 손으로 깎은 듯 블록마다 다르게
-LUMP_LOW = 0.03  # 저주파 굴곡(큰 완만한 융기/패임)
+LUMP_LOW = 0.028  # 저주파 굴곡(큰 완만한 융기/패임)
 LUMP_HIGH = 0.01  # 고주파 굴곡(작은 곰보 자국)
 CHIP_MIN = 1  # 블록당 코너 이 빠진 자국 최소 개수
 CHIP_MAX = 3  # 블록당 코너 이 빠진 자국 최대 개수
@@ -94,6 +94,72 @@ def chip_corners(bm, width, height, depth, seed, corner):
         cut += 1
 
 
+def chisel_facets(bm, width, height, depth, seed, corner):
+    # 저해상도 상태에서 면 하나에 걸쳐 크게 기운 평면 절단면(끌로 깎은 자국) 1~2개를 낸다.
+    # 앞면(-Y)을 우선하고(0.6), 위(+Z)나 옆(±X)도 고른다. 코너 이 자국(chip_corners)과는
+    # 독립된 시드 스트림을 써서 같은 첫 난수가 겹치지 않게 한다.
+    rng = random.Random(seed * 97 + 13)
+    skip_xz = CORNER_SIGN.get(corner)
+    half = Vector((width / 2, depth / 2, height / 2))
+    target = rng.randint(1, 2)
+    tried = set()
+    cut = 0
+    attempts = 0
+    while cut < target and attempts < 12:
+        attempts += 1
+        pick = rng.random()
+        if pick < 0.6:
+            face_axis = "front"
+            normal = Vector((0.0, -1.0, 0.0))
+            face_center = Vector((0.0, -half.y, 0.0))
+            in_plane, in_plane_size = rng.choice((("x", width), ("z", height)))
+        elif pick < 0.8:
+            face_axis = "top"
+            normal = Vector((0.0, 0.0, 1.0))
+            face_center = Vector((0.0, 0.0, half.z))
+            in_plane, in_plane_size = rng.choice((("x", width), ("y", depth)))
+        else:
+            face_axis = "side"
+            side_sign = 1.0 if rng.random() < 0.5 else -1.0
+            normal = Vector((side_sign, 0.0, 0.0))
+            face_center = Vector((side_sign * half.x, 0.0, 0.0))
+            in_plane, in_plane_size = rng.choice((("y", depth), ("z", height)))
+        shift_sign = 1.0 if rng.random() < 0.5 else -1.0
+        key = (face_axis, in_plane, shift_sign)
+        if key in tried:
+            continue
+        tried.add(key)
+        if (
+            face_axis == "front"
+            and skip_xz is not None
+            and (
+                (in_plane == "x" and shift_sign == float(skip_xz[0]))
+                or (in_plane == "z" and shift_sign == float(skip_xz[1]))
+            )
+        ):
+            # 로고 둥근 모서리 쪽으로 향하는 앞면 절단은 건너뛴다.
+            continue
+        axis_index = {"x": 0, "y": 1, "z": 2}[in_plane]
+        tilt_dir = Vector((0.0, 0.0, 0.0))
+        tilt_dir[axis_index] = shift_sign
+        theta = math.radians(rng.uniform(5.0, 10.0))
+        tilted_normal = (normal * math.cos(theta) + tilt_dir * math.sin(theta)).normalized()
+        chisel_depth = rng.uniform(0.035, 0.045)
+        edge_frac = rng.uniform(0.15, 0.35)
+        plane_co = face_center - normal * chisel_depth + tilt_dir * (edge_frac * in_plane_size)
+        result = bmesh.ops.bisect_plane(
+            bm,
+            geom=bm.verts[:] + bm.edges[:] + bm.faces[:],
+            plane_co=plane_co,
+            plane_no=tilted_normal,
+            clear_outer=True,
+        )
+        new_edges = [edge for edge in result["geom_cut"] if isinstance(edge, bmesh.types.BMEdge)]
+        if new_edges:
+            bmesh.ops.edgeloop_fill(bm, edges=new_edges)
+        cut += 1
+
+
 def base_mesh(name, spec, seed):
     width, height, depth = spec["size"]
     bm = bmesh.new()
@@ -126,6 +192,7 @@ def base_mesh(name, spec, seed):
             clamp_overlap=False,
         )
     chip_corners(bm, width, height, depth, seed, corner)
+    chisel_facets(bm, width, height, depth, seed, corner)
     mesh = bpy.data.meshes.new(name)
     bm.to_mesh(mesh)
     bm.free()
@@ -192,7 +259,7 @@ def sculpt(obj, spec, seed):
         )
         # 두 겹 굴곡: 저주파(큰 완만한 융기/패임)와 고주파(작은 곰보 자국)를 더한다.
         lump_low = (
-            max(-1.5, min(1.5, noise.fractal(p * 1.2 + offset, 0.9, 2.0, 3))) * LUMP_LOW
+            max(-1.5, min(1.5, noise.fractal(p * 1.0 + offset, 0.9, 2.0, 3))) * LUMP_LOW
         )
         lump_high = (
             max(-1.5, min(1.5, noise.fractal(p * 5.0 + offset * 1.7, 0.7, 2.1, 3)))
