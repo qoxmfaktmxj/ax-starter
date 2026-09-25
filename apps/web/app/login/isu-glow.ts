@@ -90,10 +90,10 @@ export function createGlowCores(specs: BlockSpec[], color: THREE.Color) {
     position.set(
       spec.center[0] + boxCenter.x,
       spec.center[1] + boxCenter.y,
-      spec.center[2] - spec.size[2] * 0.28,
+      spec.center[2] - 0.01,
     );
     rotation.setFromAxisAngle(axis, spec.rotation);
-    scale.set(box.x1 - box.x0, box.y1 - box.y0, spec.size[2] * 0.4);
+    scale.set(box.x1 - box.x0, box.y1 - box.y0, spec.size[2] * 0.58);
     mesh.setMatrixAt(index, matrix.compose(position, rotation, scale));
     // 틈마다 밝기를 다르게 해 같은 두께의 LED 막대처럼 보이지 않게 한다.
     mesh.setColorAt(

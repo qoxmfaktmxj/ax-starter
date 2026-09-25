@@ -41,4 +41,5 @@
   --color-login-sky-bottom: var(--brand-isu-dusk);
   --color-login-panel: var(--neutral-frost);
   --color-login-panel-border: var(--neutral-frost-edge);
+  --color-login-scrim: var(--neutral-scrim);
 }

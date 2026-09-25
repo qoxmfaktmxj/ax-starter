@@ -52,8 +52,26 @@
 }
 
 .loginBrand {
+  position: relative;
   align-self: end;
   padding-bottom: 14vh;
+}
+
+/* 장면의 빛이 밝아져도 슬로건이 읽히도록 글자 뒤에 은은한 어두운 번짐을 깐다. */
+.loginBrand::before {
+  content: "";
+  position: absolute;
+  left: -6vw;
+  right: -8vw;
+  bottom: calc(14vh - 48px);
+  height: 190px;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    var(--color-login-scrim),
+    transparent
+  );
 }
 
 .loginSlogan {
@@ -221,6 +239,13 @@
     display: flex;
     align-items: flex-end;
     padding-bottom: 0;
+  }
+
+  .loginBrand::before {
+    left: -16px;
+    right: -16px;
+    bottom: -40px;
+    height: 150px;
   }
 
   .loginSlogan {

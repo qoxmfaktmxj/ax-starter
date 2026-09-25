@@ -28,6 +28,7 @@
   --neutral-login-ink: #0e1b31;
   --neutral-frost: rgb(244 248 252 / 86%);
   --neutral-frost-edge: rgb(255 255 255 / 70%);
+  --neutral-scrim: rgb(6 12 26 / 62%);
 
   /* Status palette */
   --status-success: #087832;
