@@ -22,9 +22,11 @@ import bpy
 from mathutils import Vector, noise
 
 VOXEL = 0.028  # 리메시 해상도(월드 단위)
-BEVEL = 0.05  # 작은 모서리 깎기
-LUMP = 0.045  # 면의 울퉁불퉁한 정도
-CRACK = 0.09  # 모서리 균열 깊이
+BEVEL = 0.035  # 작은 모서리 깎기(날카롭지만 부드럽게)
+LUMP = 0.012  # 면의 미세한 굴곡(평평함을 유지)
+CHIP_MIN = 2  # 블록당 평평한 이가 빠진 자국 최소 개수
+CHIP_MAX = 4  # 블록당 평평한 이가 빠진 자국 최대 개수
+CHIP_RADIUS = 0.28  # 이 빠진 자국이 영향을 주는 반경
 WEAR_GAIN = 6.0  # 곡률을 마모 값으로 바꾸는 배율
 CORNER_SIGN = {"tl": (-1, 1), "tr": (1, 1), "bl": (-1, -1), "br": (1, -1)}
 
@@ -95,6 +97,42 @@ def apply_modifiers(obj):
     bpy.data.meshes.remove(old)
 
 
+def chip_block(bm, half, seed):
+    # 블록당 2~4개의 평평한 이 빠진 자국. 앞면(-Y, 카메라 방향)을 우선한다.
+    rng = random.Random(seed)
+    count = rng.randint(CHIP_MIN, CHIP_MAX)
+    for _ in range(count):
+        sign = Vector(
+            (
+                1.0 if rng.random() < 0.5 else -1.0,
+                -1.0 if rng.random() < 0.75 else 1.0,
+                1.0 if rng.random() < 0.5 else -1.0,
+            )
+        )
+        center = Vector((sign.x * half.x, sign.y * half.y, sign.z * half.z))
+        normal = Vector((sign.x, sign.y, sign.z))
+        if rng.random() < 0.6:
+            # 모서리를 따라 도는 이 자국: 한 축은 코너가 아니라 임의 위치로 옮기고 그 축의 법선을 없앤다.
+            axis = rng.choice((0, 1, 2))
+            center[axis] = rng.uniform(-0.6, 0.6) * half[axis]
+            normal[axis] = 0.0
+        normal.normalize()
+        tilt = Vector(
+            (rng.uniform(-0.25, 0.25), rng.uniform(-0.25, 0.25), rng.uniform(-0.25, 0.25))
+        )
+        normal = (normal + tilt).normalized()
+        chip_depth = rng.uniform(0.05, 0.12)
+        plane_point = center - normal * chip_depth
+        for vert in bm.verts:
+            p = vert.co
+            dist = (p - center).length
+            if dist < CHIP_RADIUS:
+                d = (p - plane_point).dot(normal)
+                if d > 0:
+                    w = 1.0 - smoothstep(CHIP_RADIUS * 0.6, CHIP_RADIUS, dist)
+                    vert.co -= normal * d * w
+
+
 def sculpt(obj, spec, seed):
     width, height, depth = spec["size"]
     bevel = obj.modifiers.new("bevel", "BEVEL")
@@ -112,6 +150,10 @@ def sculpt(obj, spec, seed):
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     bm.normal_update()
+
+    chip_block(bm, half, seed)
+    bm.normal_update()
+
     moves = []
     for vert in bm.verts:
         p = vert.co
@@ -126,10 +168,11 @@ def sculpt(obj, spec, seed):
                 - 1.0,
             ),
         )
-        lump = max(-1.5, min(1.5, noise.fractal(p * 3.0 + offset, 0.9, 2.0, 4))) * LUMP
-        distances, _ = noise.voronoi(p * 5.5 + offset, distance_metric="DISTANCE", exponent=2.5)
-        crack = (1.0 - smoothstep(0.0, 0.28, distances[1] - distances[0])) * CRACK * edge
-        moves.append((vert, vert.normal.copy() * (lump - crack)))
+        # 낮은 주파수로 살짝만 굴곡을 준다. 평평함을 유지한다.
+        lump = max(-1.5, min(1.5, noise.fractal(p * 1.6 + offset, 0.9, 2.0, 4))) * LUMP
+        # 모서리 근처에만 고주파 잔부스러기를 더한다.
+        crumble = noise.noise(p * 18.0 + offset) * 0.006 * edge
+        moves.append((vert, vert.normal.copy() * (lump + crumble)))
     for vert, move in moves:
         vert.co += move
     bm.normal_update()
@@ -137,6 +180,8 @@ def sculpt(obj, spec, seed):
     bm.free()
     for polygon in obj.data.polygons:
         polygon.use_smooth = True
+    # 이 빠진 평평한 면과 몸통 경계를 날카롭게, 나머지는 부드럽게 유지한다.
+    obj.data.set_sharp_from_angle(angle=math.radians(32))
 
 
 def unwrap(obj):
@@ -256,7 +301,7 @@ def render_preview(blocks, path):
     camera_data = bpy.data.cameras.new("preview")
     camera = bpy.data.objects.new("preview", camera_data)
     scene.collection.objects.link(camera)
-    camera.location = (-2.5, -13.0, 2.2)
+    camera.location = (-1.6, -8.5, 1.9)
     camera.rotation_euler = (Vector((0.2, 0.0, 1.6)) - camera.location).to_track_quat("-Z", "Y").to_euler()
     scene.camera = camera
     sun_data = bpy.data.lights.new("sun", "SUN")
