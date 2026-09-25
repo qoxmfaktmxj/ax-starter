@@ -66,7 +66,9 @@ docker compose -p isu-visual --profile test run --rm test pnpm e2e
 | `tests/unit/isu-layout.test.ts`, `tests/unit/login-motion.test.ts` | 단위 테스트 | 1 |
 | `apps/web/app/login/login.css` | Share 옅게, 장면 캔버스 클래스, HUD 캔버스 | 2, 6 |
 | `tests/e2e/login-scene.spec.ts` | 슬로건 상태, HUD | 2, 6 |
-| `apps/web/app/login/isu-blocks.ts` | 블록 형태, 얼음돌 재질, 초록 큐브 | 3 |
+| `scripts/export-isu-layout.ts`, `tools/blender/*` | 블렌더 입력 JSON과 블록 생성 스크립트 | 3A |
+| `apps/web/public/models/*`, `apps/web/public/draco/*` | 블렌더 산출 GLB, 출처, Draco 해독기 | 3A, 3B |
+| `apps/web/app/login/isu-blocks.ts` | GLB 불러오기, 얼음돌 재질, 초록 큐브 | 3B |
 | `apps/web/app/login/isu-glow.ts` | 틈새 심, 바닥 빛 | 4 |
 | `apps/web/app/login/isu-post.ts` | 후처리 체인, 높이 안개 | 5 |
 | `apps/web/app/login/isu-hud.ts`, `tests/unit/isu-hud.test.ts` | HUD 점 선택, 그리기 | 6 |
@@ -457,7 +459,7 @@ import { buildIsuLayout, type BlockSpec } from "./isu-layout";
 import { courseFactor, createLoginMotion, shareIntensity } from "./login-motion";
 ```
 
-2. `function boxGeometry(spec: BoxBlock) {`부터 `function arcGeometry(spec: ArcBlock) { ... }`의 끝까지 두 함수를 지우고 다음 하나로 바꾼다(Task 3에서 다시 교체한다):
+2. `function boxGeometry(spec: BoxBlock) {`부터 `function arcGeometry(spec: ArcBlock) { ... }`의 끝까지 두 함수를 지우고 다음 하나로 바꾼다(Task 3B에서 다시 교체한다):
 
 ```ts
 function blockGeometry(spec: BlockSpec) {
@@ -624,146 +626,519 @@ git commit -m "feat(login): show Share the Future faintly until sign-in succeeds
 
 ---
 
-### Task 3: 블록 형태, 파랑 얼음돌 재질, 초록 큐브
+### Task 3A: 블렌더 블록 에셋
+
+설계 문서 8절(2026-09-25 결정)에 따라 블록 형태와 굽기를 블렌더로 만든다.
+
+**Files:**
+- Create: `scripts/export-isu-layout.ts`
+- Create: `tools/blender/isu-layout.json` (스크립트 산출, 커밋)
+- Create: `tools/blender/build_isu_blocks.py`
+- Create: `tests/unit/isu-layout-export.test.ts`
+- Create: `apps/web/public/models/isu-blocks.glb` (스크립트 산출, 커밋)
+- Create: `apps/web/public/models/provenance.json`
+- Modify: `docs/DEPENDENCIES.md`
+- 산출(커밋하지 않음): `output/blender/isu-blocks-preview.png`
+
+**Interfaces:**
+- Consumes: Task 1 `buildIsuLayout(): BlockSpec[]`.
+- Produces: `apps/web/public/models/isu-blocks.glb`. 메시 노드 이름 `block-00` ~ `block-25`(배치 순서, 두 자리). 각 메시는 원점이 블록 중심이고 회전이 없는 로컬 좌표(three 기준 x=폭, y=높이, z=두께)이며 속성 `position`, `normal`, `uv`, `color`(RGBA: R=AO, G=모서리 마모, B=블록별 색조, A=1)를 가진다. Draco 압축.
+
+블렌더 실행 파일: `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe` (5.2.1 LTS).
+
+- [ ] **Step 1: 실패하는 단위 테스트 작성**
+
+`tests/unit/isu-layout-export.test.ts`:
+
+```ts
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { buildIsuLayout } from "../../apps/web/app/login/isu-layout";
+
+describe("Blender layout input", () => {
+  it("matches buildIsuLayout() exactly", () => {
+    const exported = JSON.parse(
+      readFileSync("tools/blender/isu-layout.json", "utf8"),
+    );
+    expect(exported).toEqual(buildIsuLayout());
+  });
+});
+```
+
+Run: `pnpm test`
+Expected: FAIL, `ENOENT: no such file or directory, open 'tools/blender/isu-layout.json'`.
+
+- [ ] **Step 2: 배치 내보내기 스크립트**
+
+`scripts/export-isu-layout.ts`:
+
+```ts
+import { mkdir, writeFile } from "node:fs/promises";
+import { buildIsuLayout } from "../apps/web/app/login/isu-layout";
+
+// 블렌더 블록 스크립트의 입력. 배치를 바꾸면 이 스크립트와 블렌더 스크립트를 다시 실행한다.
+await mkdir("tools/blender", { recursive: true });
+await writeFile(
+  "tools/blender/isu-layout.json",
+  `${JSON.stringify(buildIsuLayout(), null, 2)}\n`,
+);
+console.log("tools/blender/isu-layout.json written");
+```
+
+Run: `pnpm exec tsx scripts/export-isu-layout.ts` 후 `pnpm test`
+Expected: 새 테스트 PASS, 전체 PASS.
+
+- [ ] **Step 3: 블렌더 스크립트 작성**
+
+`tools/blender/build_isu_blocks.py`:
+
+```python
+"""ISU 로그인 블록 모델을 만든다.
+
+블렌더 5.2.1에서 화면 없이 실행한다.
+  blender -b --factory-startup --python tools/blender/build_isu_blocks.py -- \
+    --layout tools/blender/isu-layout.json \
+    --out apps/web/public/models/isu-blocks.glb \
+    --preview output/blender/isu-blocks-preview.png
+
+좌표: three (x, y, z)를 블렌더 (x, -z, y)로 둔다. glTF 내보내기의 export_yup이 되돌린다.
+정점 색 isu: R=AO, G=모서리 마모, B=블록별 색조 편차.
+"""
+
+import argparse
+import json
+import math
+import os
+import random
+import sys
+
+import bmesh
+import bpy
+from mathutils import Vector, noise
+
+VOXEL = 0.028  # 리메시 해상도(월드 단위)
+BEVEL = 0.05  # 작은 모서리 깎기
+LUMP = 0.022  # 면의 울퉁불퉁한 정도
+CRACK = 0.05  # 모서리 균열 깊이
+WEAR_GAIN = 6.0  # 곡률을 마모 값으로 바꾸는 배율
+CORNER_SIGN = {"tl": (-1, 1), "tr": (1, 1), "bl": (-1, -1), "br": (1, -1)}
+
+
+def parse_args():
+    argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--layout", required=True)
+    parser.add_argument("--out", required=True)
+    parser.add_argument("--preview")
+    return parser.parse_args(argv)
+
+
+def smoothstep(edge0, edge1, x):
+    t = max(0.0, min(1.0, (x - edge0) / (edge1 - edge0)))
+    return t * t * (3 - 2 * t)
+
+
+def activate(obj):
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+
+
+def base_mesh(name, spec):
+    width, height, depth = spec["size"]
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    for vert in bm.verts:
+        vert.co.x *= width
+        vert.co.y *= depth
+        vert.co.z *= height
+    corner = spec["corner"]
+    if corner != "none":
+        # 로고에서 둥근 바깥 모서리: 두께 방향 모서리 하나를 블록 크기만큼 크게 깎는다.
+        sx, sz = CORNER_SIGN[corner]
+        edges = [
+            edge
+            for edge in bm.edges
+            if all(
+                abs(vert.co.x - sx * width / 2) < 1e-5
+                and abs(vert.co.z - sz * height / 2) < 1e-5
+                for vert in edge.verts
+            )
+        ]
+        bmesh.ops.bevel(
+            bm,
+            geom=edges,
+            offset=min(width, height) * 0.9,
+            offset_type="OFFSET",
+            segments=16,
+            profile=0.5,
+            affect="EDGES",
+            clamp_overlap=False,
+        )
+    mesh = bpy.data.meshes.new(name)
+    bm.to_mesh(mesh)
+    bm.free()
+    return mesh
+
+
+def apply_modifiers(obj):
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    mesh = bpy.data.meshes.new_from_object(obj.evaluated_get(depsgraph))
+    old = obj.data
+    obj.modifiers.clear()
+    obj.data = mesh
+    bpy.data.meshes.remove(old)
+
+
+def sculpt(obj, spec, seed):
+    width, height, depth = spec["size"]
+    bevel = obj.modifiers.new("bevel", "BEVEL")
+    bevel.width = BEVEL
+    bevel.segments = 3
+    bevel.limit_method = "ANGLE"
+    bevel.angle_limit = math.radians(40)
+    remesh = obj.modifiers.new("remesh", "REMESH")
+    remesh.mode = "VOXEL"
+    remesh.voxel_size = VOXEL
+    apply_modifiers(obj)
+
+    half = Vector((width / 2, depth / 2, height / 2))
+    offset = Vector((seed * 3.1, seed * 1.7, seed * 5.3))
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.normal_update()
+    moves = []
+    for vert in bm.verts:
+        p = vert.co
+        # 두 축 이상이 끝에 가까운 곳을 모서리로 본다.
+        edge = max(
+            0.0,
+            min(
+                1.0,
+                smoothstep(0.72, 1.0, abs(p.x) / half.x)
+                + smoothstep(0.72, 1.0, abs(p.y) / half.y)
+                + smoothstep(0.72, 1.0, abs(p.z) / half.z)
+                - 1.0,
+            ),
+        )
+        lump = max(-1.5, min(1.5, noise.fractal(p * 3.0 + offset, 0.9, 2.0, 4))) * LUMP
+        distances, _ = noise.voronoi(p * 5.5 + offset, distance_metric="DISTANCE", exponent=2.5)
+        crack = (1.0 - smoothstep(0.0, 0.28, distances[1] - distances[0])) * CRACK * edge
+        moves.append((vert, vert.normal.copy() * (lump - crack)))
+    for vert, move in moves:
+        vert.co += move
+    bm.normal_update()
+    bm.to_mesh(obj.data)
+    bm.free()
+    for polygon in obj.data.polygons:
+        polygon.use_smooth = True
+
+
+def unwrap(obj):
+    activate(obj)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.02)
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+
+def place(obj, spec):
+    x, y, z = spec["center"]
+    obj.location = (x, -z, y)
+    obj.rotation_euler = (0.0, -spec["rotation"], 0.0)
+
+
+def prepare_colors(obj):
+    mesh = obj.data
+    attribute = mesh.color_attributes.new(name="isu", type="FLOAT_COLOR", domain="POINT")
+    index = list(mesh.color_attributes).index(attribute)
+    mesh.color_attributes.active_color_index = index
+    mesh.color_attributes.render_color_index = index
+
+
+def bake_ambient_occlusion(blocks):
+    scene = bpy.context.scene
+    scene.render.engine = "CYCLES"
+    scene.cycles.device = "CPU"
+    scene.cycles.samples = 64
+    scene.world = bpy.data.worlds.new("ao")
+    scene.world.light_settings.distance = 0.8
+    # 바닥 접촉 그림자를 위해 바닥면을 잠시 둔다.
+    bpy.ops.mesh.primitive_plane_add(size=30, location=(0, 0, 0))
+    ground = bpy.context.active_object
+    for obj in blocks:
+        activate(obj)
+        bpy.ops.object.bake(type="AO", target="VERTEX_COLORS")
+    bpy.data.objects.remove(ground, do_unlink=True)
+
+
+def edge_wear(mesh):
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    bm.normal_update()
+    wear = [0.0] * len(bm.verts)
+    for vert in bm.verts:
+        total = 0.0
+        for edge in vert.link_edges:
+            direction = (edge.other_vert(vert).co - vert.co).normalized()
+            # 볼록한 곳은 이웃이 법선 반대편에 있어 값이 커진다.
+            total -= direction.dot(vert.normal)
+        count = max(len(vert.link_edges), 1)
+        wear[vert.index] = max(0.0, min(1.0, total / count * WEAR_GAIN))
+    bm.free()
+    return wear
+
+
+def finalize_colors(obj, seed):
+    mesh = obj.data
+    wear = edge_wear(mesh)
+    tint = random.Random(seed).random()
+    for index, value in enumerate(mesh.color_attributes["isu"].data):
+        value.color = (value.color[0], wear[index], tint, 1.0)
+
+
+def export(blocks, path):
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in blocks:
+        obj.select_set(True)
+    bpy.ops.export_scene.gltf(
+        filepath=path,
+        export_format="GLB",
+        use_selection=True,
+        export_yup=True,
+        export_apply=False,
+        export_normals=True,
+        export_texcoords=True,
+        export_materials="NONE",
+        export_vertex_color="ACTIVE",
+        export_active_vertex_color_when_no_material=True,
+        export_all_vertex_colors=False,
+        export_draco_mesh_compression_enable=True,
+        export_draco_mesh_compression_level=6,
+        export_draco_position_quantization=14,
+        export_draco_normal_quantization=10,
+        export_draco_texcoord_quantization=12,
+        export_draco_color_quantization=10,
+    )
+
+
+def render_preview(blocks, path):
+    scene = bpy.context.scene
+    material = bpy.data.materials.new("preview")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    bsdf = nodes["Principled BSDF"]
+    bsdf.inputs["Roughness"].default_value = 0.6
+    attribute = nodes.new("ShaderNodeVertexColor")
+    attribute.layer_name = "isu"
+    separate = nodes.new("ShaderNodeSeparateColor")
+    shade = nodes.new("ShaderNodeMix")
+    shade.data_type = "RGBA"
+    shade.blend_type = "MULTIPLY"
+    shade.inputs["Factor"].default_value = 1.0
+    color_a = next(i for i in shade.inputs if i.identifier == "A_Color")
+    color_b = next(i for i in shade.inputs if i.identifier == "B_Color")
+    color_a.default_value = (0.0, 0.33, 0.62, 1.0)
+    links.new(attribute.outputs["Color"], separate.inputs["Color"])
+    links.new(separate.outputs["Red"], color_b)
+    links.new(next(o for o in shade.outputs if o.identifier == "Result_Color"), bsdf.inputs["Base Color"])
+    for obj in blocks:
+        obj.data.materials.clear()
+        obj.data.materials.append(material)
+    bpy.ops.mesh.primitive_plane_add(size=30, location=(0, 0, 0))
+    camera_data = bpy.data.cameras.new("preview")
+    camera = bpy.data.objects.new("preview", camera_data)
+    scene.collection.objects.link(camera)
+    camera.location = (-2.5, -13.0, 2.2)
+    camera.rotation_euler = (Vector((0.2, 0.0, 1.6)) - camera.location).to_track_quat("-Z", "Y").to_euler()
+    scene.camera = camera
+    sun_data = bpy.data.lights.new("sun", "SUN")
+    sun_data.energy = 3.0
+    sun = bpy.data.objects.new("sun", sun_data)
+    sun.rotation_euler = (math.radians(50), 0.0, math.radians(-30))
+    scene.collection.objects.link(sun)
+    scene.world.color = (0.05, 0.08, 0.14)
+    scene.cycles.samples = 48
+    scene.render.resolution_x = 1280
+    scene.render.resolution_y = 720
+    scene.render.filepath = os.path.abspath(path)
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    bpy.ops.render.render(write_still=True)
+
+
+def main():
+    args = parse_args()
+    with open(args.layout, encoding="utf-8") as file:
+        layout = json.load(file)
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    blocks = []
+    for index, spec in enumerate(layout):
+        name = f"block-{index:02d}"
+        obj = bpy.data.objects.new(name, base_mesh(name, spec))
+        bpy.context.collection.objects.link(obj)
+        sculpt(obj, spec, index + 1)
+        unwrap(obj)
+        place(obj, spec)
+        prepare_colors(obj)
+        blocks.append(obj)
+    bake_ambient_occlusion(blocks)
+    for index, obj in enumerate(blocks):
+        finalize_colors(obj, index + 1)
+    triangles = sum(sum(len(p.vertices) - 2 for p in obj.data.polygons) for obj in blocks)
+    print(f"ISU_BLOCKS blocks={len(blocks)} triangles={triangles}")
+    export(blocks, args.out)
+    print(f"ISU_BLOCKS glb={os.path.getsize(args.out)} bytes")
+    if args.preview:
+        render_preview(blocks, args.preview)
+        print(f"ISU_BLOCKS preview={args.preview}")
+
+
+main()
+```
+
+- [ ] **Step 4: 스크립트 실행**
+
+PowerShell:
+
+```powershell
+& "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" -b --factory-startup --python tools/blender/build_isu_blocks.py -- --layout tools/blender/isu-layout.json --out apps/web/public/models/isu-blocks.glb --preview output/blender/isu-blocks-preview.png
+```
+
+Expected: `ISU_BLOCKS blocks=26 triangles=...`, `ISU_BLOCKS glb=... bytes`, `ISU_BLOCKS preview=...`가 출력된다.
+
+블렌더 API 이름이 5.2.1과 다르면(예: `export_vertex_color` 값, `bmesh.ops.bevel` 인자, 굽기 조건) 다음으로 실제 이름을 확인하고 가장 작은 수정으로 맞춘다. 수정 내용과 이유를 보고한다.
+
+```powershell
+& "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" -b --factory-startup --python-expr "import bpy; p = bpy.ops.export_scene.gltf.get_rna_type().properties; print([i.identifier for i in p['export_vertex_color'].enum_items])"
+```
+
+AO 굽기가 재질이 없다는 이유로 실패하면, 굽기 전에 블록마다 빈 재질 하나를 넣고 내보낼 때는 `export_materials="NONE"`로 재질을 빼는 방식으로 고친다.
+
+- [ ] **Step 5: 결과 확인과 조정**
+
+1. `output/blender/isu-blocks-preview.png`를 Read 도구로 열어 확인한다. 대문자 ISU로 읽히고, 블록마다 면이 다르게 울퉁불퉁하며, 모서리가 깨진 얼음돌처럼 보이고, S 왼쪽 위와 오른쪽 아래, U 아래 양쪽 모서리가 둥근지, 블록 틈과 바닥 접촉면에 AO가 들어갔는지 본다.
+2. 삼각형 수는 전체 25만 이하, GLB는 4MB 이하를 목표로 한다. 넘으면 `VOXEL`을 0.004씩 키운다.
+3. 형태가 밋밋하면 `LUMP`, `CRACK`을, 너무 거칠면 줄인다. 한 번에 한 값만 바꾸고 다시 실행한다. 최대 4회.
+4. 최종 값과 삼각형 수, GLB 크기, 미리보기에서 본 내용을 보고한다.
+
+- [ ] **Step 6: 출처와 의존성 기록**
+
+`apps/web/public/models/provenance.json`:
+
+```json
+{
+  "file": "isu-blocks.glb",
+  "generator": "tools/blender/build_isu_blocks.py",
+  "blender": "5.2.1 LTS",
+  "input": "tools/blender/isu-layout.json (scripts/export-isu-layout.ts, buildIsuLayout())",
+  "external_assets": false,
+  "compression": "KHR_draco_mesh_compression",
+  "attributes": "position, normal, uv, color (R=AO, G=edge wear, B=per-block tint)",
+  "note": "Block shapes are generated procedurally by the script. No models, textures or code from third-party sites are included."
+}
+```
+
+`docs/DEPENDENCIES.md` 표의 `| three |` 행 바로 아래에 추가:
+
+```text
+| Blender                      | 5.2.1 LTS (빌드 도구)                                        | 로그인 블록 모델을 `tools/blender/build_isu_blocks.py`로 생성. GPL-3.0-or-later 도구이며 저장소와 이미지에는 포함하지 않는다. 산출물 GLB는 스크립트의 결과물이다 |
+```
+
+- [ ] **Step 7: 빠른 검사와 커밋**
+
+Run: `pnpm exec prettier --write scripts/export-isu-layout.ts tests/unit/isu-layout-export.test.ts apps/web/public/models/provenance.json` 후 `pnpm format:check` `pnpm lint` `pnpm typecheck` `pnpm architecture` `pnpm test`
+Expected: 모두 exit 0.
+
+```bash
+git add scripts/export-isu-layout.ts tools/blender/isu-layout.json tools/blender/build_isu_blocks.py tests/unit/isu-layout-export.test.ts apps/web/public/models/isu-blocks.glb apps/web/public/models/provenance.json docs/DEPENDENCIES.md
+git commit -m "feat(login): Blender-built ISU ice block models with baked AO" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 3B: 블렌더 블록을 장면에 연결, 파랑 얼음돌 재질, 초록 큐브
 
 **Files:**
 - Create: `apps/web/app/login/isu-blocks.ts`
+- Create: `apps/web/public/draco/draco_decoder.js`, `draco_decoder.wasm`, `draco_wasm_wrapper.js` (three에서 복사)
 - Modify: `apps/web/app/login/isu-scene.ts`
+- Modify: `tests/e2e/login-scene.spec.ts`
 
 **Interfaces:**
-- Consumes: Task 1 `BlockSpec`, `courseFactor`.
+- Consumes: Task 1 `BlockSpec`, `courseFactor`. Task 3A `isu-blocks.glb`(메시 `block-00` ~ `block-25`, 속성 `color` R=AO, G=마모, B=색조).
 - Produces (`isu-blocks.ts`):
-  - `createBlockGeometry(spec: BlockSpec, seed: number): THREE.BufferGeometry`
+  - `loadBlockGeometries(count: number, signal: AbortSignal): Promise<THREE.BufferGeometry[]>`
   - `type IceShared = { reveal: { value: number }; glow: { value: THREE.Color }; snow: { value: THREE.Color } }`
   - `createIceMaterial(maps: { frost: THREE.Texture; bump: THREE.Texture }, shared: IceShared, color: THREE.Color): THREE.MeshStandardMaterial`
-  - `createDotShellMaterial(maps: { frost: THREE.Texture; bump: THREE.Texture }, shared: IceShared, color: THREE.Color): THREE.MeshStandardMaterial`
+  - `createDotShellMaterial(maps, shared, color): THREE.MeshStandardMaterial`
   - `createDotCore(spec: BlockSpec, color: THREE.Color): { mesh: THREE.Mesh; setIntensity(value: number): void; dispose(): void }`
+  - 장면 블록 레코드 필드(Task 4 이후가 쓴다): `mesh`, `material`, `base`, `outward`, `rotation`, `reach`, `dot`, `id`, `amount`, `target`, `idle`, `shareDistance`. 장면 지역 변수 `dotSpec`, `dotCore`, 렌더 함수 지역 변수 `breath`.
 
-- [ ] **Step 1: 블록 모듈 작성**
+- [ ] **Step 1: 실패하는 e2e 추가**
+
+`tests/e2e/login-scene.spec.ts` 끝에 추가:
+
+```ts
+
+test("a missing block model falls back to the still image", async ({
+  page,
+}) => {
+  await page.route("**/models/isu-blocks.glb", (route) => route.abort());
+  await page.goto("/login");
+  await expect(canvas(page)).toHaveAttribute("data-ready", "false", {
+    timeout: 30_000,
+  });
+  await expect
+    .poll(() => sceneBackground(page))
+    .toContain("login-still-desktop.webp");
+  await expect(page.getByLabel("아이디")).toBeEditable();
+});
+```
+
+Run: e2e 빌드와 기동 후 `docker compose -p isu-visual --profile test run --rm test pnpm e2e tests/e2e/login-scene.spec.ts`
+Expected: 새 테스트 FAIL(장면이 모델을 쓰지 않으므로 `data-ready`가 "false"가 되지 않는다).
+
+- [ ] **Step 2: Draco 해독기 복사**
+
+```powershell
+New-Item -ItemType Directory -Force apps\web\public\draco | Out-Null
+foreach ($f in "draco_decoder.js","draco_decoder.wasm","draco_wasm_wrapper.js") { Copy-Item "node_modules\three\examples\jsm\libs\draco\gltf\$f" "apps\web\public\draco\$f" }
+```
+
+`apps/web/public/models/provenance.json`에 키를 추가한다: `"decoder": "apps/web/public/draco/* copied from three 0.183.2 examples/jsm/libs/draco/gltf (MIT via three)"`.
+
+- [ ] **Step 3: 블록 모듈 작성**
 
 `apps/web/app/login/isu-blocks.ts`:
 
 ```ts
 import * as THREE from "three";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { BlockSpec } from "./isu-layout";
 
-// 블록 형태와 재질. 둥근 상자를 촘촘히 나눈 뒤 저주파 잡음으로 면을 울퉁불퉁하게,
-// 모서리 근처만 고주파 잡음으로 깨진 듯 깎는다.
-const BEVEL = 0.07;
-const LUMP = 0.03;
-const CHIP = 0.06;
+// 블렌더(tools/blender/build_isu_blocks.py)로 만든 블록 형태를 불러오고 파랑 얼음돌 재질을 입힌다.
+const BLOCK_MODEL_URL = "/models/isu-blocks.glb";
 
-const hash3 = (x: number, y: number, z: number) => {
-  const n = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
-  return n - Math.floor(n);
-};
-const smooth = (t: number) => t * t * (3 - 2 * t);
-
-function noise3(x: number, y: number, z: number) {
-  const ix = Math.floor(x);
-  const iy = Math.floor(y);
-  const iz = Math.floor(z);
-  const fx = smooth(x - ix);
-  const fy = smooth(y - iy);
-  const fz = smooth(z - iz);
-  const lerp = THREE.MathUtils.lerp;
-  const layer = (dz: number) =>
-    lerp(
-      lerp(hash3(ix, iy, iz + dz), hash3(ix + 1, iy, iz + dz), fx),
-      lerp(hash3(ix, iy + 1, iz + dz), hash3(ix + 1, iy + 1, iz + dz), fx),
-      fy,
-    );
-  return lerp(layer(0), layer(1), fz);
-}
-
-function fbm3(x: number, y: number, z: number) {
-  let value = 0;
-  let amplitude = 0.5;
-  let frequency = 1;
-  for (let octave = 0; octave < 4; octave++) {
-    value += noise3(x * frequency, y * frequency, z * frequency) * amplitude;
-    frequency *= 2.03;
-    amplitude *= 0.5;
+export async function loadBlockGeometries(count: number, signal: AbortSignal) {
+  const draco = new DRACOLoader().setDecoderPath("/draco/");
+  const loader = new GLTFLoader().setDRACOLoader(draco);
+  try {
+    const gltf = await loader.loadAsync(BLOCK_MODEL_URL);
+    if (signal.aborted)
+      throw new DOMException("Scene initialization cancelled", "AbortError");
+    return Array.from({ length: count }, (_, index) => {
+      const name = `block-${String(index).padStart(2, "0")}`;
+      const node = gltf.scene.getObjectByName(name);
+      if (!(node instanceof THREE.Mesh))
+        throw new Error(`블록 모델에 ${name}이 없습니다.`);
+      return node.geometry as THREE.BufferGeometry;
+    });
+  } finally {
+    draco.dispose();
   }
-  return value / 0.9375;
-}
-
-const CORNER_SIGN: Record<Exclude<BlockSpec["corner"], "none">, [number, number]> = {
-  tl: [-1, 1],
-  tr: [1, 1],
-  bl: [-1, -1],
-  br: [1, -1],
-};
-
-export function createBlockGeometry(spec: BlockSpec, seed: number) {
-  const [width, height, depth] = spec.size;
-  const geometry = new THREE.BoxGeometry(1, 1, 1, 28, 22, 12);
-  const positions = geometry.attributes.position;
-  const frostUv = new Float32Array(positions.count * 2);
-  const half = new THREE.Vector3(width / 2, height / 2, depth / 2);
-  const inner = half.clone().subScalar(BEVEL);
-  const innerMin = inner.clone().negate();
-  const point = new THREE.Vector3();
-  const core = new THREE.Vector3();
-  const outward = new THREE.Vector3();
-  const round =
-    spec.corner === "none"
-      ? null
-      : { sign: CORNER_SIGN[spec.corner], radius: Math.min(width, height) * 0.9 };
-  for (let i = 0; i < positions.count; i++) {
-    frostUv[i * 2] = positions.getX(i) + 0.5;
-    frostUv[i * 2 + 1] = positions.getY(i) + 0.5;
-    point.set(
-      positions.getX(i) * width,
-      positions.getY(i) * height,
-      positions.getZ(i) * depth,
-    );
-    // 1) 모든 모서리를 BEVEL 반지름으로 둥글린다.
-    core.copy(point).clamp(innerMin, inner);
-    outward.copy(point).sub(core);
-    if (outward.lengthSq() < 1e-10) outward.set(0, 0, Math.sign(point.z) || 1);
-    outward.normalize();
-    point.copy(core).addScaledVector(outward, BEVEL);
-    // 2) 로고에서 둥근 바깥 모서리는 블록 크기만큼 크게 깎는다.
-    if (round) {
-      const [sx, sy] = round.sign;
-      const cx = sx * (width / 2 - round.radius);
-      const cy = sy * (height / 2 - round.radius);
-      const dx = point.x - cx;
-      const dy = point.y - cy;
-      const distance = Math.hypot(dx, dy);
-      if (dx * sx > 0 && dy * sy > 0 && distance > round.radius) {
-        point.x = cx + (dx / distance) * round.radius;
-        point.y = cy + (dy / distance) * round.radius;
-        outward.set(dx / distance, dy / distance, outward.z).normalize();
-      }
-    }
-    // 3) 면은 울퉁불퉁하게, 모서리 근처(두 축 이상이 끝에 가까운 곳)는 깨진 듯 깎는다.
-    const edge = Math.min(
-      1,
-      Math.max(
-        0,
-        THREE.MathUtils.smoothstep(Math.abs(point.x) / half.x, 0.7, 1) +
-          THREE.MathUtils.smoothstep(Math.abs(point.y) / half.y, 0.7, 1) +
-          THREE.MathUtils.smoothstep(Math.abs(point.z) / half.z, 0.7, 1) -
-          1,
-      ),
-    );
-    const lump =
-      (fbm3(point.x * 1.7 + seed * 3.1, point.y * 1.7, point.z * 1.7) - 0.5) *
-      2 *
-      LUMP;
-    const chip =
-      Math.max(0, fbm3(point.x * 5 + seed * 7.3, point.y * 5, point.z * 5) - 0.52) *
-      2.2 *
-      CHIP *
-      edge;
-    point.addScaledVector(outward, lump - chip);
-    positions.setXYZ(i, point.x, point.y, point.z);
-  }
-  geometry.setAttribute("frostUv", new THREE.BufferAttribute(frostUv, 2));
-  geometry.computeVertexNormals();
-  return geometry;
 }
 
 type Shader = Parameters<THREE.MeshStandardMaterial["onBeforeCompile"]>[0];
@@ -803,19 +1178,16 @@ function addReveal(shader: Shader, reveal: { value: number }) {
   );
 }
 
-// 파랑 얼음돌: 결에 따라 짙고 옅은 파랑이 섞이고, 위를 향한 면에는 눈이 얹히며, 모서리는 서리처럼 밝다.
+// 파랑 얼음돌: 굽기 AO로 틈을 어둡게, 깨진 모서리는 밝은 서리로, 위를 향한 면에는 눈을 얹는다.
 function addIceSurface(shader: Shader, shared: IceShared) {
   shader.uniforms.uIceGlow = shared.glow;
   shader.uniforms.uSnow = shared.snow;
   shader.vertexShader = shader.vertexShader
     .replace(
       "#include <common>",
-      "#include <common>\nattribute vec2 frostUv; varying vec2 vFrostCoord; varying vec3 vIceWorld; varying vec3 vIceNormal;",
+      "#include <common>\nattribute vec4 color; varying vec4 vIceBake; varying vec3 vIceWorld; varying vec3 vIceNormal;",
     )
-    .replace(
-      "#include <begin_vertex>",
-      "#include <begin_vertex>\nvFrostCoord = frostUv;",
-    )
+    .replace("#include <begin_vertex>", "#include <begin_vertex>\nvIceBake = color;")
     .replace(
       "#include <worldpos_vertex>",
       "#include <worldpos_vertex>\nvIceWorld = (modelMatrix * vec4(transformed, 1.)).xyz; vIceNormal = normalize(mat3(modelMatrix) * objectNormal);",
@@ -823,20 +1195,23 @@ function addIceSurface(shader: Shader, shared: IceShared) {
   shader.fragmentShader = shader.fragmentShader
     .replace(
       "#include <common>",
-      "#include <common>\nuniform vec3 uIceGlow; uniform vec3 uSnow; varying vec2 vFrostCoord; varying vec3 vIceWorld; varying vec3 vIceNormal;",
+      "#include <common>\nuniform vec3 uIceGlow; uniform vec3 uSnow; varying vec4 vIceBake; varying vec3 vIceWorld; varying vec3 vIceNormal;",
     )
     .replace(
       "#include <map_fragment>",
       `#include <map_fragment>
+      float bakedAo = vIceBake.r;
+      float wear = vIceBake.g;
+      float tint = vIceBake.b;
       float frostGrain = texture2D(map, vMapUv * 2.0).r;
       float fineGrain = texture2D(map, vIceWorld.xy * .9 + vIceWorld.z * .37).g;
-      float frostBorder = smoothstep(.36, .50, max(abs(vFrostCoord.x - .5), abs(vFrostCoord.y - .5)) + (frostGrain - .5) * .05);
-      vec3 blueDeep = diffuseColor.rgb * .5;
+      vec3 blueDeep = diffuseColor.rgb * .45;
       vec3 blueLight = mix(diffuseColor.rgb, vec3(.72, .9, 1.), .3);
-      vec3 stone = mix(blueDeep, blueLight, smoothstep(.2, .85, frostGrain * .65 + fineGrain * .35));
+      vec3 stone = mix(blueDeep, blueLight, smoothstep(.2, .85, frostGrain * .6 + fineGrain * .25 + tint * .15));
       float snowCover = smoothstep(.5, .9, vIceNormal.y) * (.55 + .45 * fineGrain);
       stone = mix(stone, uSnow, snowCover);
-      diffuseColor.rgb = mix(stone, vec3(.8, .93, 1.), frostBorder * .3);`,
+      stone = mix(stone, vec3(.82, .94, 1.), smoothstep(.35, .9, wear) * .45);
+      diffuseColor.rgb = stone * mix(.3, 1., bakedAo);`,
     )
     .replace(
       "#include <roughnessmap_fragment>",
@@ -847,7 +1222,7 @@ function addIceSurface(shader: Shader, shared: IceShared) {
       "#include <emissivemap_fragment>",
       `#include <emissivemap_fragment>
       float frostRim = pow(1. - max(0., dot(normalize(vNormal), normalize(vViewPosition))), 4.);
-      totalEmissiveRadiance += uIceGlow * (frostRim * .16 + pow(frostBorder, 3.) * .14);`,
+      totalEmissiveRadiance += uIceGlow * (frostRim * .16 * bakedAo + wear * wear * .12);`,
     );
 }
 
@@ -860,7 +1235,7 @@ export function createIceMaterial(
     color,
     map: maps.frost,
     normalMap: maps.bump,
-    normalScale: new THREE.Vector2(0.35, 0.35),
+    normalScale: new THREE.Vector2(0.3, 0.3),
     roughness: 0.6,
     metalness: 0,
   });
@@ -921,29 +1296,29 @@ export function createDotCore(spec: BlockSpec, color: THREE.Color) {
 }
 ```
 
-- [ ] **Step 2: 장면에 연결**
+- [ ] **Step 4: 장면에 연결**
 
 `apps/web/app/login/isu-scene.ts`에서:
 
-1. import에 추가:
+1. import 추가:
 
 ```ts
 import {
-  createBlockGeometry,
   createDotCore,
   createDotShellMaterial,
   createIceMaterial,
+  loadBlockGeometries,
 } from "./isu-blocks";
 ```
 
-2. `TUNE`의 `iceColor: 0xc6dcf2,` 줄을 지우고 그 자리에 다음 두 줄을 넣는다:
+2. `TUNE`의 `iceColor: 0xc6dcf2,` 줄을 지우고 그 자리에 추가:
 
 ```ts
   isuBlue: new THREE.Color("#0090d0"),
   snow: new THREE.Color("#e6f2ff"),
 ```
 
-3. 함수 `roundedFrostBox`, `frostUvOf`, `blockGeometry`와 `type Shader = ...;` 줄을 지운다(terrain 셰이더는 `Shader` 타입을 쓰지 않는다. 쓰고 있으면 `Parameters<THREE.MeshStandardMaterial["onBeforeCompile"]>[0]`로 대체한다).
+3. 함수 `roundedFrostBox`, `frostUvOf`, `blockGeometry`를 지운다. `type Shader = ...;` 줄은 다른 곳에서 쓰지 않으면 지운다.
 
 4. `// 등장: 윤곽선만 보이다가 재질이 위에서 아래로 차오른다.` 줄부터 `const makeIce = (isDot: boolean) => { ... };`의 끝까지를 지우고 다음으로 바꾼다:
 
@@ -958,14 +1333,27 @@ import {
   const maps = { frost, bump };
 ```
 
-5. 블록 생성 `const blocks = layout.map((spec, index) => { ... });` 전체를 다음으로 바꾼다:
+5. `const layout = buildIsuLayout();` 다음 줄에 추가:
+
+```ts
+  // 블렌더로 만든 블록 형태. 불러오지 못하면 렌더러를 정리하고 정지 이미지로 넘어간다.
+  let geometries: THREE.BufferGeometry[];
+  try {
+    geometries = await loadBlockGeometries(layout.length, signal);
+  } catch (error) {
+    renderer.dispose();
+    throw error;
+  }
+```
+
+6. 블록 생성 `const blocks = layout.map((spec, index) => { ... });` 전체를 다음으로 바꾼다:
 
 ```ts
   const blocks = layout.map((spec, index) => {
     const material = spec.dot
       ? createDotShellMaterial(maps, iceShared, TUNE.lime)
       : createIceMaterial(maps, iceShared, TUNE.isuBlue);
-    const mesh = new THREE.Mesh(createBlockGeometry(spec, index + 1), material);
+    const mesh = new THREE.Mesh(geometries[index], material);
     const base = new THREE.Vector3(...spec.center);
     // 손으로 쌓은 느낌을 주려고 블록마다 크기 +-6%, 기울기 +-3도 편차를 준다.
     mesh.scale.setScalar(1 + (hash(index, 41) - 0.5) * 0.12);
@@ -1000,14 +1388,14 @@ import {
   blocks.find((block) => block.dot)!.mesh.add(dotCore.mesh);
 ```
 
-6. 렌더 함수에서 `const frame = motion.update(delta);` 다음 줄에 추가:
+7. 렌더 함수에서 `const frame = motion.update(delta);` 다음 줄에 추가:
 
 ```ts
     // 초록 큐브는 약 3초 주기로 숨 쉬듯 밝아졌다 어두워진다.
     const breath = 0.5 + 0.5 * Math.sin((time * Math.PI * 2) / 3);
 ```
 
-7. 렌더 루프의
+8. 렌더 루프의
 
 ```ts
       if (block.dot)
@@ -1023,29 +1411,29 @@ import {
           .multiplyScalar(0.35 + breath * 0.25 + lit * 0.8);
 ```
 
-8. 렌더 루프가 끝난 직후(`snowMaterial.uniforms.uTime.value = time;` 바로 위)에 추가:
+9. 렌더 루프가 끝난 직후(`snowMaterial.uniforms.uTime.value = time;` 바로 위)에 추가:
 
 ```ts
     dotCore.setIntensity(1.6 + breath * 0.8 + frame.share * 1.2);
 ```
 
-9. `dispose()` 안의 `for (const block of blocks) block.material.dispose();` 다음 줄에 `dotCore.dispose();`를 넣는다.
+10. `dispose()` 안의 `for (const block of blocks) block.material.dispose();` 다음 줄에 `dotCore.dispose();`를 넣는다.
 
-- [ ] **Step 3: 빠른 검사**
+- [ ] **Step 5: 빠른 검사**
 
-Run: `pnpm exec prettier --write apps/web/app/login` 후 `pnpm format:check` `pnpm lint` `pnpm typecheck` `pnpm architecture` `pnpm test`
+Run: `pnpm exec prettier --write apps/web/app/login tests/e2e/login-scene.spec.ts apps/web/public/models/provenance.json` 후 `pnpm format:check` `pnpm lint` `pnpm typecheck` `pnpm architecture` `pnpm test`
 Expected: 모두 exit 0.
 
-- [ ] **Step 4: e2e와 리뷰 캡처**
+- [ ] **Step 6: e2e와 리뷰 캡처**
 
-Run: e2e 빌드와 기동, `docker compose -p isu-visual --profile test run --rm test pnpm e2e tests/e2e/login-scene.spec.ts`, 그 뒤 리뷰 캡처.
-Expected: 전부 PASS. `login-1440x900.png`를 열어 확인하고 보고한다: 블록이 파랑이고 면이 울퉁불퉁하며 모서리가 깨져 보이는지, 윗면에 눈 빛이 있는지, 초록 큐브가 안에서 빛나는지, S 왼쪽 위와 오른쪽 아래, U 아래 양쪽 모서리가 둥근지, 면이 뒤집혀 까맣게 보이는 블록이 없는지.
+Run: e2e 빌드와 기동, 전체 `docker compose -p isu-visual --profile test run --rm test pnpm e2e`, 리뷰 캡처.
+Expected: 전체 PASS(새 모델 없음 테스트 포함). `login-1440x900.png`를 열어 보고한다: 블록이 파랑 얼음돌로 보이는지, 블렌더에서 만든 울퉁불퉁한 면과 깨진 모서리가 보이는지, AO로 틈과 바닥이 어두운지, 윗면에 눈 빛이 있는지, 초록 큐브가 안에서 빛나는지, 면이 뒤집히거나 블록이 엉뚱한 곳에 있지 않은지. 블록 방향이 틀어져 보이면(두께와 높이가 바뀜) 3A의 좌표 변환을 의심하고 보고한다.
 
-- [ ] **Step 5: 커밋**
+- [ ] **Step 7: 커밋**
 
 ```bash
-git add apps/web/app/login/isu-blocks.ts apps/web/app/login/isu-scene.ts
-git commit -m "feat(login): sculpted blue ice-stone blocks and glowing green cube" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git add apps/web/app/login/isu-blocks.ts apps/web/app/login/isu-scene.ts apps/web/public/draco apps/web/public/models/provenance.json tests/e2e/login-scene.spec.ts
+git commit -m "feat(login): load Blender blocks with blue ice-stone shading and green core" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1057,7 +1445,7 @@ git commit -m "feat(login): sculpted blue ice-stone blocks and glowing green cub
 - Modify: `apps/web/app/login/isu-scene.ts`
 
 **Interfaces:**
-- Consumes: Task 1 `BlockSpec`, `BLOCK_GAP`, `landing`, `LANDING_SPAN`. Task 3 블록 레코드(`block.mesh`, `block.base`, `block.rotation`, `block.reach`, `block.dot`, `block.id`), 렌더 함수의 `breath`.
+- Consumes: Task 1 `BlockSpec`, `BLOCK_GAP`, `landing`, `LANDING_SPAN`. Task 3B 블록 레코드(`block.mesh`, `block.base`, `block.rotation`, `block.reach`, `block.dot`, `block.id`), 렌더 함수의 `breath`.
 - Produces (`isu-glow.ts`):
   - `createGlowCores(specs: BlockSpec[], color: THREE.Color): { mesh: THREE.InstancedMesh; setIntensity(value: number): void; dispose(): void }`
   - `createGroundGlow(width: number, depth: number, dotX: number, ice: THREE.Color, lime: THREE.Color): { mesh: THREE.Mesh; setIntensity(ice: number, lime: number): void; dispose(): void }`
@@ -1183,7 +1571,7 @@ import {
   glow: { core: 0.9, coreOpen: 2.2, ground: 0.35, groundOpen: 0.4, lime: 5 },
 ```
 
-3. Task 3에서 만든 블록 return 객체의 `shareDistance: base.distanceTo(dotCenter),` 다음 줄에 추가:
+3. Task 3B에서 만든 블록 return 객체의 `shareDistance: base.distanceTo(dotCenter),` 다음 줄에 추가:
 
 ```ts
       course: spec.course,
@@ -1272,7 +1660,7 @@ import {
       );
 ```
 
-7. Task 3에서 넣은 `dotCore.setIntensity(...)` 줄 다음에 추가:
+7. Task 3B에서 넣은 `dotCore.setIntensity(...)` 줄 다음에 추가:
 
 ```ts
     // 블록이 벌어질수록 심과 바닥 빛이 밝아진다.
