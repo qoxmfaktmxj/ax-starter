@@ -5,7 +5,7 @@ import {
   createIceMaterial,
   loadBlockGeometries,
 } from "./isu-blocks";
-import { createGlowCores, createGroundGlow } from "./isu-glow";
+import { createGlowCores, createGroundGlow, seamSides } from "./isu-glow";
 import { drawHud, pickHudPoints, type HudPoint } from "./isu-hud";
 import { createIsuLandscape } from "./isu-landscape";
 import { buildIsuLayout } from "./isu-layout";
@@ -44,12 +44,26 @@ const TUNE = {
   coreColor: new THREE.Color(0.92, 0.96, 1),
   lime: new THREE.Color("#a0c840"),
   post: {
-    bloom: { strength: 0.6, radius: 0.4, threshold: 0.8 },
+    bloom: { strength: 0.6, radius: 0.09, threshold: 0.8 },
     ao: { radius: 0.35, intensity: 0.85 },
-    grade: { contrast: 1.12, vignette: 0.45, grain: 0.012, aberration: 0.002 },
+    grade: {
+      contrast: 1.05,
+      lift: 0,
+      vignette: 0.6,
+      grain: 0.012,
+      aberration: 0.002,
+    },
   },
   haze: { color: new THREE.Color("#22324d"), density: 0.8 },
-  glow: { core: 3.2, coreOpen: 3.0, ground: 0.8, groundOpen: 0.8, lime: 6 },
+  glow: {
+    core: 3.2,
+    coreOpen: 3.0,
+    ground: 0.8,
+    groundOpen: 0.8,
+    lime: 6,
+    spill: 0.35,
+    spillOpen: 0.5,
+  },
   pointerOrbit: { theta: 0.06, phi: 0.025 },
   desktop: { zoomPerAspect: 0.42, offsetX: 0.2, offsetY: 0.06 },
   portrait: { zoomPerAspect: 0.86, offsetY: 0.28 },
@@ -203,6 +217,8 @@ export async function createIsuScene(
     reveal,
     glow: { value: TUNE.iceGlow.clone() },
     snow: { value: TUNE.snow.clone() },
+    seam: { value: TUNE.glow.spill },
+    seamColor: { value: TUNE.coreColor.clone() },
   };
   const maps = { frost, bump };
 
@@ -320,12 +336,19 @@ export async function createIsuScene(
   const blocks = layout.map((spec, index) => {
     const material = spec.dot
       ? createDotShellMaterial(maps, iceShared, TUNE.lime)
-      : createIceMaterial(maps, iceShared, TUNE.isuBlue);
+      : createIceMaterial(
+          maps,
+          iceShared,
+          TUNE.isuBlue,
+          spec.size,
+          seamSides(spec, layout),
+        );
     const mesh = new THREE.Mesh(geometries[index], material);
     const base = new THREE.Vector3(...spec.center);
-    // 손으로 쌓은 느낌을 주려고 블록마다 위치 편차(블록 폭/높이의 6% 이내)를 준다.
-    base.x += (hash(index, 83) - 0.5) * spec.size[0] * 0.06;
+    // 손으로 쌓은 느낌을 주려고 블록마다 위치 편차(폭 10%, 높이 6%)와 깊이 방향 돌출(30%)을 준다.
+    base.x += (hash(index, 83) - 0.5) * spec.size[0] * 0.1;
     base.y += (hash(index, 89) - 0.5) * spec.size[1] * 0.06;
+    base.z += (hash(index, 97) - 0.5) * spec.size[2] * 0.3;
     // 블록마다 크기 +-6%, 기울기 +-3도 편차를 준다.
     mesh.scale.setScalar(1 + (hash(index, 41) - 0.5) * 0.12);
     const rotation =
@@ -343,8 +366,8 @@ export async function createIsuScene(
         .subVectors(base, letterCenters.get(spec.letter)!)
         .setZ(0)
         .normalize()
-        .multiplyScalar(spec.size[0] * 0.22)
-        .add(new THREE.Vector3(0, spec.size[1] * 0.1, 0.3)),
+        .multiplyScalar(spec.size[0] * 0.3)
+        .add(new THREE.Vector3(0, spec.size[1] * 0.12, 0.35)),
       rotation,
       reach: courseFactor(spec.course),
       dot: spec.dot,
@@ -639,15 +662,17 @@ export async function createIsuScene(
         idleTarget,
         1 - Math.exp(-delta * 1.6),
       );
+      // 포인터에 가까운 블록일수록 반응 속도가 빨라 파도처럼 퍼져 보인다.
+      const spreadRate = 3.7 * (1.2 - Math.min(distance, 2.4) / 4);
       block.target = THREE.MathUtils.lerp(
         block.target,
-        local * (0.8 + hash(block.id, 7) * 0.4),
-        1 - Math.exp(-delta * 3.7),
+        local * (1.0 + hash(block.id, 7) * 0.4),
+        1 - Math.exp(-delta * spreadRate),
       );
       block.amount = THREE.MathUtils.lerp(
         block.amount,
         block.target,
-        1 - Math.exp(-delta * 3.7),
+        1 - Math.exp(-delta * spreadRate),
       );
       const land = landing(introProgress, block.delay);
       const spread = Math.max(block.amount, block.idle);
@@ -657,10 +682,10 @@ export async function createIsuScene(
         .lerp(block.base, land)
         .addScaledVector(block.outward, spread);
       block.mesh.rotation.set(
-        spread * Math.sin(block.id) * 0.14 + (1 - land) * block.spin,
-        spread * Math.cos(block.id * 0.9) * 0.14,
+        spread * Math.sin(block.id) * 0.2 + (1 - land) * block.spin,
+        spread * Math.cos(block.id * 0.9) * 0.2,
         block.rotation +
-          spread * Math.sin(block.id * 0.7) * 0.1 +
+          spread * Math.sin(block.id * 0.7) * 0.14 +
           (1 - land) * block.spin * 0.5,
       );
       const lit = shareIntensity(
@@ -682,7 +707,7 @@ export async function createIsuScene(
     }
 
     dotCore.setIntensity(1.6 + breath * 0.8 + frame.share * 1.2);
-    // 블록이 벌어질수록 심과 바닥 빛이 밝아진다.
+    // 블록이 벌어질수록 심과 바닥 빛, 틈 옆 블록 면으로 번지는 빛이 밝아진다.
     const openness = THREE.MathUtils.smoothstep(opened, 0.02, 0.25);
     cores.setIntensity(TUNE.glow.core + openness * TUNE.glow.coreOpen);
     groundGlow.setIntensity(
@@ -691,6 +716,7 @@ export async function createIsuScene(
     );
     limeLight.intensity =
       TUNE.glow.lime * (0.7 + breath * 0.3) * (1 + frame.share);
+    iceShared.seam.value = TUNE.glow.spill + openness * TUNE.glow.spillOpen;
     if (hudContext && hudCanvas) {
       hudAlpha = THREE.MathUtils.lerp(
         hudAlpha,
@@ -712,7 +738,7 @@ export async function createIsuScene(
             distance: block.base.distanceTo(dampedCursor),
           };
         });
-      const shown = pickHudPoints(candidates, 7, 3.4);
+      const shown = pickHudPoints(candidates, 8, 4.5);
       drawHud(hudContext, shown, hudAlpha, hudScale);
       hudCanvas.dataset.points = String(hudAlpha > 0.5 ? shown.length : 0);
     }

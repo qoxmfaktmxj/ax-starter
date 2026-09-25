@@ -85,7 +85,9 @@ try {
         await openScene(page);
         const canvas = page.locator(".loginScene .loginSceneCanvas");
         const before = Number(await canvas.getAttribute("data-frames"));
-        await page.waitForTimeout(5_000);
+        // SwiftShader는 초당 약 1프레임이고 LoginScene의 프레임 간격이 0.06초로 제한돼
+        // 실제 대기 시간의 일부만 장면 시간으로 반영된다. 길게 기다려야 등장/벌어짐이 자리잡는다.
+        await page.waitForTimeout(25_000);
         const after = Number(await canvas.getAttribute("data-frames"));
         // ponytail: SwiftShader의 전체 화면 캡처는 느려 기본 30초 제한을 넘길 수 있다.
         await page.screenshot({
@@ -93,7 +95,7 @@ try {
           timeout: 180_000,
         });
         console.log(
-          `login-${width}x${height}: ${((after - before) / 5).toFixed(1)} fps (SwiftShader)`,
+          `login-${width}x${height}: ${((after - before) / 25).toFixed(1)} fps (SwiftShader)`,
         );
       } finally {
         await page.close();

@@ -4,18 +4,20 @@ import { BLOCK_GAP, blockBounds, type BlockSpec } from "./isu-layout";
 const FILL = BLOCK_GAP * 0.6; // 이웃 쪽으로 틈을 메우는 길이
 const INSET = 0.03; // 글자 바깥쪽은 블록 안으로 줄인다
 
-// 심의 로컬 상자(회전 전, 블록 중심 기준)를 정한다. 이웃이 있는 쪽으로만 틈을 메우고
-// 글자 바깥쪽과 둥근 모서리 쪽은 블록 안으로 줄여 실루엣 밖으로 빛이 새지 않게 한다.
-function coreBox(spec: BlockSpec, specs: BlockSpec[]) {
-  const [width, height] = spec.size;
-  if (spec.rotation !== 0)
-    // 대각선 획 블록은 획 방향 양 끝만 이웃과 닿는다.
-    return {
-      x0: -width / 2 - FILL,
-      x1: width / 2 + FILL,
-      y0: -height / 2 + INSET,
-      y1: height / 2 - INSET,
-    };
+// isu-scene의 hash와 같은 식. 심 인스턴스별 밝기 편차에 쓴다.
+const hash = (x: number, y: number) => {
+  const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+  return n - Math.floor(n);
+};
+
+// 같은 글자 이웃이 왼쪽/오른쪽/아래/위에 있으면 1, 없으면 0. 틈새 발광 상자와
+// 블록 면으로 번지는 빛(isu-blocks.ts) 양쪽이 같은 이웃 판정을 쓰도록 여기 둔다.
+export function seamSides(
+  spec: BlockSpec,
+  specs: BlockSpec[],
+): [number, number, number, number] {
+  // 대각선 획 블록은 획 방향 양 끝만 이웃과 닿는다.
+  if (spec.rotation !== 0) return [1, 1, 0, 0];
   const me = blockBounds(spec);
   const others = specs
     .filter(
@@ -39,6 +41,21 @@ function coreBox(spec: BlockSpec, specs: BlockSpec[]) {
   const above = others.some(
     (b) => overlapsX(b) && Math.abs(b.min[1] - me.max[1]) < near,
   );
+  return [left ? 1 : 0, right ? 1 : 0, below ? 1 : 0, above ? 1 : 0];
+}
+
+// 심의 로컬 상자(회전 전, 블록 중심 기준)를 정한다. 이웃이 있는 쪽으로만 틈을 메우고
+// 글자 바깥쪽과 둥근 모서리 쪽은 블록 안으로 줄여 실루엣 밖으로 빛이 새지 않게 한다.
+function coreBox(spec: BlockSpec, specs: BlockSpec[]) {
+  const [width, height] = spec.size;
+  const [left, right, below, above] = seamSides(spec, specs);
+  if (spec.rotation !== 0)
+    return {
+      x0: -width / 2 - FILL,
+      x1: width / 2 + FILL,
+      y0: -height / 2 + INSET,
+      y1: height / 2 - INSET,
+    };
   // 둥근 모서리 블록은 그 모서리 쪽 두 변을 크게 줄여 네모난 빛이 곡선 밖으로 나오지 않게 한다.
   const round = Math.min(width, height) * 0.35;
   const cut = (side: "l" | "r" | "t" | "b") =>
@@ -57,7 +74,7 @@ export function createGlowCores(specs: BlockSpec[], color: THREE.Color) {
   const geometry = new THREE.BoxGeometry(1, 1, 1);
   const material = new THREE.MeshBasicMaterial({
     color: color.clone(),
-    toneMapped: false,
+    toneMapped: true,
   });
   const mesh = new THREE.InstancedMesh(geometry, material, cores.length);
   const matrix = new THREE.Matrix4();
@@ -78,8 +95,14 @@ export function createGlowCores(specs: BlockSpec[], color: THREE.Color) {
     rotation.setFromAxisAngle(axis, spec.rotation);
     scale.set(box.x1 - box.x0, box.y1 - box.y0, spec.size[2] * 0.4);
     mesh.setMatrixAt(index, matrix.compose(position, rotation, scale));
+    // 틈마다 밝기를 다르게 해 같은 두께의 LED 막대처럼 보이지 않게 한다.
+    mesh.setColorAt(
+      index,
+      new THREE.Color().setScalar(0.6 + hash(index, 15) * 0.4),
+    );
   });
   mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   return {
     mesh,
     setIntensity(value: number) {

@@ -49,8 +49,8 @@ export function createIsuLandscape(
   ridge: (x: number, z: number) => number,
 ) {
   const viewport = { value: new THREE.Vector2(1, 1) };
-  const lowSky = { value: new THREE.Color("#0b1428") };
-  const highSky = { value: new THREE.Color("#22324f") };
+  const lowSky = { value: new THREE.Color("#101c38") };
+  const highSky = { value: new THREE.Color("#2a3d63") };
   const skyMaterial = new THREE.ShaderMaterial({
     uniforms: { viewport, lowSky, highSky },
     vertexShader:

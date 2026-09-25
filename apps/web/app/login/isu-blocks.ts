@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import type { BlockSpec } from "./isu-layout";
+import type { BlockSpec, Vec3 } from "./isu-layout";
 
 // 블렌더(tools/blender/build_isu_blocks.py)로 만든 블록 형태를 불러오고 파랑 얼음돌 재질을 입힌다.
 const BLOCK_MODEL_URL = "/models/isu-blocks.glb";
@@ -31,6 +31,8 @@ export type IceShared = {
   reveal: { value: number };
   glow: { value: THREE.Color };
   snow: { value: THREE.Color };
+  seam: { value: number };
+  seamColor: { value: THREE.Color };
 };
 
 type IceMaps = { frost: THREE.Texture; bump: THREE.Texture };
@@ -63,17 +65,27 @@ function addReveal(shader: Shader, reveal: { value: number }) {
 }
 
 // 파랑 얼음돌: 굽기 AO로 틈을 어둡게, 깨진 모서리는 밝은 서리로, 위를 향한 면에는 눈을 얹는다.
-function addIceSurface(shader: Shader, shared: IceShared) {
+// half/sides는 블록마다 다른 크기와 이웃 방향(seamSides)이라 재질별 uniform으로 둔다.
+function addIceSurface(
+  shader: Shader,
+  shared: IceShared,
+  half: THREE.Vector3,
+  sides: [number, number, number, number],
+) {
   shader.uniforms.uIceGlow = shared.glow;
   shader.uniforms.uSnow = shared.snow;
+  shader.uniforms.uSeam = shared.seam;
+  shader.uniforms.uSeamColor = shared.seamColor;
+  shader.uniforms.uIceHalf = { value: half };
+  shader.uniforms.uIceSides = { value: new THREE.Vector4(...sides) };
   shader.vertexShader = shader.vertexShader
     .replace(
       "#include <common>",
-      "#include <common>\nattribute vec4 color; varying vec4 vIceBake; varying vec3 vIceWorld; varying vec3 vIceNormal;",
+      "#include <common>\nattribute vec4 color; varying vec4 vIceBake; varying vec3 vIceWorld; varying vec3 vIceNormal; varying vec3 vIceLocal;",
     )
     .replace(
       "#include <begin_vertex>",
-      "#include <begin_vertex>\nvIceBake = color;",
+      "#include <begin_vertex>\nvIceBake = color; vIceLocal = position;",
     )
     .replace(
       "#include <worldpos_vertex>",
@@ -82,7 +94,7 @@ function addIceSurface(shader: Shader, shared: IceShared) {
   shader.fragmentShader = shader.fragmentShader
     .replace(
       "#include <common>",
-      "#include <common>\nuniform vec3 uIceGlow; uniform vec3 uSnow; varying vec4 vIceBake; varying vec3 vIceWorld; varying vec3 vIceNormal;",
+      "#include <common>\nuniform vec3 uIceGlow; uniform vec3 uSnow; uniform float uSeam; uniform vec3 uSeamColor; uniform vec3 uIceHalf; uniform vec4 uIceSides; varying vec4 vIceBake; varying vec3 vIceWorld; varying vec3 vIceNormal; varying vec3 vIceLocal;",
     )
     .replace(
       "#include <map_fragment>",
@@ -111,7 +123,14 @@ function addIceSurface(shader: Shader, shared: IceShared) {
       "#include <emissivemap_fragment>",
       `#include <emissivemap_fragment>
       float frostRim = pow(1. - max(0., dot(normalize(vNormal), normalize(vViewPosition))), 4.);
-      totalEmissiveRadiance += uIceGlow * (frostRim * .16 * bakedAo + wear * wear * .12);`,
+      totalEmissiveRadiance += uIceGlow * (frostRim * .16 * bakedAo + wear * wear * .12);
+      float seamReach = uIceHalf.y * .4;
+      float spill = max(
+        max(uIceSides.x * (1. - smoothstep(0., seamReach, vIceLocal.x + uIceHalf.x)),
+            uIceSides.y * (1. - smoothstep(0., seamReach, uIceHalf.x - vIceLocal.x))),
+        max(uIceSides.z * (1. - smoothstep(0., seamReach, vIceLocal.y + uIceHalf.y)),
+            uIceSides.w * (1. - smoothstep(0., seamReach, uIceHalf.y - vIceLocal.y))));
+      totalEmissiveRadiance += uSeamColor * spill * spill * uSeam;`,
     );
 }
 
@@ -119,17 +138,20 @@ export function createIceMaterial(
   maps: IceMaps,
   shared: IceShared,
   color: THREE.Color,
+  size: Vec3,
+  sides: [number, number, number, number],
 ) {
   const material = new THREE.MeshStandardMaterial({
     color,
     map: maps.frost,
     normalMap: maps.bump,
-    normalScale: new THREE.Vector2(0.3, 0.3),
+    normalScale: new THREE.Vector2(0.55, 0.55),
     roughness: 0.6,
     metalness: 0,
   });
+  const half = new THREE.Vector3(size[0] / 2, size[1] / 2, size[2] / 2);
   material.onBeforeCompile = (shader) => {
-    addIceSurface(shader, shared);
+    addIceSurface(shader, shared, half, sides);
     addReveal(shader, shared.reveal);
   };
   material.customProgramCacheKey = () => "isu-ice";

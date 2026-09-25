@@ -24,9 +24,8 @@ export function drawHud(
   context.scale(scale, scale);
   context.lineWidth = 1;
   context.shadowBlur = 0;
-  context.strokeStyle = `rgba(230, 240, 255, ${0.7 * alpha})`;
-  context.fillStyle = `rgba(255, 255, 255, ${0.9 * alpha})`;
-  context.font = "600 12px ui-monospace, SFMono-Regular, Consolas, monospace";
+  context.strokeStyle = `rgba(230, 240, 255, ${0.75 * alpha})`;
+  context.font = "700 13px ui-monospace, SFMono-Regular, Consolas, monospace";
   context.beginPath();
   points.forEach((point, index) =>
     index === 0
@@ -41,11 +40,15 @@ export function drawHud(
     context.moveTo(point.x, point.y - 7);
     context.lineTo(point.x, point.y + 7);
     context.stroke();
-    // 밝아진 블록 면 위에서도 읽히도록 글자에만 어두운 그림자를 준다.
-    context.shadowColor = "rgba(0, 10, 30, 0.6)";
-    context.shadowBlur = 2;
-    context.fillText(hudLabel(point.id), point.x - 18, point.y - 6);
-    context.shadowBlur = 0;
+    // 숫자 뒤에 작은 배경을 깔아 밝은 bloom 위에서도 묻히지 않게 한다.
+    const label = hudLabel(point.id);
+    const width = context.measureText(label).width;
+    context.fillStyle = `rgba(0, 10, 30, ${0.55 * alpha})`;
+    context.beginPath();
+    context.roundRect(point.x - 21, point.y - 17, width + 6, 15, 2);
+    context.fill();
+    context.fillStyle = `rgba(255, 255, 255, ${0.9 * alpha})`;
+    context.fillText(label, point.x - 18, point.y - 6);
   }
   context.restore();
 }

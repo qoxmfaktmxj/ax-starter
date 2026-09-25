@@ -11,6 +11,7 @@ export type PostSettings = {
   ao: { radius: number; intensity: number };
   grade: {
     contrast: number;
+    lift: number;
     vignette: number;
     grain: number;
     aberration: number;
@@ -24,6 +25,7 @@ const GradeShader = {
     uResolution: { value: new THREE.Vector2(1, 1) },
     uTime: { value: 0 },
     uContrast: { value: 1 },
+    uLift: { value: 0 },
     uVignette: { value: 0 },
     uGrain: { value: 0 },
     uAberration: { value: 0 },
@@ -31,7 +33,7 @@ const GradeShader = {
   vertexShader:
     "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }",
   fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 uResolution;
-    uniform float uTime, uContrast, uVignette, uGrain, uAberration;
+    uniform float uTime, uContrast, uLift, uVignette, uGrain, uAberration;
     varying vec2 vUv;
     float rand(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main(){
@@ -44,7 +46,8 @@ const GradeShader = {
         texture2D(tDiffuse, vUv - shift).b
       );
       color = (color - .18) * uContrast + .18;
-      color *= 1. - uVignette * smoothstep(.35, .85, dist);
+      color = color * (1. - uLift) + uLift;
+      color *= 1. - uVignette * smoothstep(.25, .85, dist);
       color += (rand(vUv * uResolution + fract(uTime) * 100.) - .5) * uGrain;
       gl_FragColor = vec4(max(color, 0.), 1.);
     }`,
@@ -88,6 +91,7 @@ export function createPostChain(
   );
   const grade = new ShaderPass(GradeShader);
   grade.uniforms.uContrast.value = settings.grade.contrast;
+  grade.uniforms.uLift.value = settings.grade.lift;
   grade.uniforms.uVignette.value = settings.grade.vignette;
   grade.uniforms.uGrain.value = settings.grade.grain;
   grade.uniforms.uAberration.value = settings.grade.aberration;
