@@ -207,6 +207,8 @@ export async function createIsuScene(
     texture.repeat.set(95, 95);
     texture.anisotropy = 8;
   }
+  // 지형 셰이더에 직접 주입하는 바닥 빛. 블록/dot 레이아웃이 준비된 뒤 아래에서 만든다.
+  let groundGlow: ReturnType<typeof createGroundGlow>;
   const terrainMaterial = new THREE.MeshStandardMaterial({
     color: TUNE.terrainColor,
     map: terrainMap,
@@ -241,6 +243,7 @@ export async function createIsuScene(
       snowSurface *= .80 + texture2D(uSnowAlbedo, vMapUv * 5.).r * .40;
       diffuseColor.rgb = snowSurface * mix(vec3(.38,.43,.56), vec3(1.10,1.13,1.18), smoothstep(-.12,.78,windFacing));`,
     );
+    groundGlow.applyToShader(shader);
   };
   const terrainSegments = mobile ? 180 : 300;
   const terrainGeometry = new THREE.PlaneGeometry(
@@ -362,15 +365,13 @@ export async function createIsuScene(
     });
   const cores = createGlowCores(layout, TUNE.iceGlow);
   letters.add(cores.mesh);
-  const groundGlow = createGroundGlow(
+  groundGlow = createGroundGlow(
     9,
     4,
     dotSpec.center[0],
     TUNE.iceGlow,
     TUNE.lime,
   );
-  groundGlow.mesh.position.set(0, 0.02, 0.4);
-  letters.add(groundGlow.mesh);
   const limeLight = new THREE.PointLight(TUNE.lime, 0, 3.5, 2);
   limeLight.position.set(
     dotSpec.center[0],

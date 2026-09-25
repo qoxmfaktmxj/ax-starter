@@ -41,7 +41,10 @@ export function createGlowCores(specs: BlockSpec[], color: THREE.Color) {
   };
 }
 
-// 글자 아래 바닥에 번지는 빛. 가운데는 푸른 흰빛, 초록 큐브 아래는 연두 빛이다.
+type Shader = Parameters<THREE.MeshStandardMaterial["onBeforeCompile"]>[0];
+
+// 글자 아래 바닥에 번지는 빛. 지형 셰이더에 직접 더해 굴곡진 지형에도 매끄럽게 번진다.
+// 가운데는 푸른 흰빛, 초록 큐브 아래는 연두 빛이다.
 export function createGroundGlow(
   width: number,
   depth: number,
@@ -50,41 +53,56 @@ export function createGroundGlow(
   lime: THREE.Color,
 ) {
   const uniforms = {
+    // 글자 무리의 바닥 중심(월드 x, z). z는 기존 mesh 오프셋 0.4를 그대로 가져온다.
+    uGlowCenter: { value: new THREE.Vector2(0, 0.4) },
+    uGlowSize: { value: new THREE.Vector2(width, depth) },
     uIce: { value: 0.35 },
     uLime: { value: 0.4 },
     uDotX: { value: dotX / (width / 2) },
     uIceColor: { value: ice.clone() },
     uLimeColor: { value: lime.clone() },
   };
-  const material = new THREE.ShaderMaterial({
-    uniforms,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    toneMapped: false,
-    vertexShader:
-      "varying vec2 vGlowUv; void main(){ vGlowUv = uv * 2. - 1.; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }",
-    fragmentShader: `uniform float uIce, uLime, uDotX; uniform vec3 uIceColor, uLimeColor; varying vec2 vGlowUv;
-      void main(){
-        float ice = exp(-(vGlowUv.x * vGlowUv.x * 2.4 + vGlowUv.y * vGlowUv.y * 7.));
-        float dx = vGlowUv.x - uDotX;
-        float lime = exp(-(dx * dx * 18. + vGlowUv.y * vGlowUv.y * 10.));
-        gl_FragColor = vec4(uIceColor * ice * uIce + uLimeColor * lime * uLime, 1.);
-      }`,
-  });
-  const geometry = new THREE.PlaneGeometry(width, depth);
-  geometry.rotateX(-Math.PI / 2);
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.renderOrder = 2;
   return {
-    mesh,
+    uniforms,
+    applyToShader(shader: Shader) {
+      Object.assign(shader.uniforms, uniforms);
+      shader.vertexShader = shader.vertexShader
+        .replace(
+          "#include <common>",
+          "#include <common>\nvarying vec3 vGlowWorld;",
+        )
+        .replace(
+          "#include <worldpos_vertex>",
+          "#include <worldpos_vertex>\nvGlowWorld = (modelMatrix * vec4(transformed, 1.)).xyz;",
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          "#include <common>",
+          `#include <common>
+          uniform vec2 uGlowCenter, uGlowSize;
+          uniform float uIce, uLime, uDotX;
+          uniform vec3 uIceColor, uLimeColor;
+          varying vec3 vGlowWorld;`,
+        )
+        .replace(
+          "#include <emissivemap_fragment>",
+          `#include <emissivemap_fragment>
+          {
+            vec2 glowUv = vec2(
+              (vGlowWorld.x - uGlowCenter.x) / (uGlowSize.x * .5),
+              (vGlowWorld.z - uGlowCenter.y) / (uGlowSize.y * .5)
+            );
+            float ice = exp(-(glowUv.x * glowUv.x * 2.4 + glowUv.y * glowUv.y * 7.));
+            float dx = glowUv.x - uDotX;
+            float lime = exp(-(dx * dx * 18. + glowUv.y * glowUv.y * 10.));
+            totalEmissiveRadiance += uIceColor * ice * uIce + uLimeColor * lime * uLime;
+          }`,
+        );
+    },
     setIntensity(iceValue: number, limeValue: number) {
       uniforms.uIce.value = iceValue;
       uniforms.uLime.value = limeValue;
     },
-    dispose() {
-      geometry.dispose();
-      material.dispose();
-    },
+    dispose() {},
   };
 }
