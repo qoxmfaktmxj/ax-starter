@@ -351,8 +351,7 @@ export async function createIsuScene(
     base.z += (hash(index, 97) - 0.5) * spec.size[2] * 0.3;
     // 블록마다 크기 +-6%, 기울기 +-3도 편차를 준다.
     mesh.scale.setScalar(1 + (hash(index, 41) - 0.5) * 0.12);
-    const rotation =
-      spec.rotation + (hash(index, 53) - 0.5) * THREE.MathUtils.degToRad(6);
+    const rotation = (hash(index, 53) - 0.5) * THREE.MathUtils.degToRad(6);
     mesh.position.copy(base);
     mesh.rotation.z = rotation;
     mesh.castShadow = mesh.receiveShadow = !spec.dot;

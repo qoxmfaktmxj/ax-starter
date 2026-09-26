@@ -16,8 +16,6 @@ export function seamSides(
   spec: BlockSpec,
   specs: BlockSpec[],
 ): [number, number, number, number] {
-  // 대각선 획 블록은 획 방향 양 끝만 이웃과 닿는다.
-  if (spec.rotation !== 0) return [1, 1, 0, 0];
   const me = blockBounds(spec);
   const others = specs
     .filter(
@@ -49,17 +47,22 @@ export function seamSides(
 function coreBox(spec: BlockSpec, specs: BlockSpec[]) {
   const [width, height] = spec.size;
   const [left, right, below, above] = seamSides(spec, specs);
-  if (spec.rotation !== 0)
-    return {
-      x0: -width / 2 - FILL,
-      x1: width / 2 + FILL,
-      y0: -height / 2 + INSET,
-      y1: height / 2 - INSET,
-    };
   // 둥근 모서리 블록은 그 모서리 쪽 두 변을 크게 줄여 네모난 빛이 곡선 밖으로 나오지 않게 한다.
   const round = Math.min(width, height) * 0.35;
   const cut = (side: "l" | "r" | "t" | "b") =>
     spec.corner !== "none" && spec.corner.includes(side) ? round : INSET;
+  if (spec.outline) {
+    // 비스듬한 옆면 밖으로 심이 새지 않게, 윤곽의 안쪽 직사각형으로 x 범위를 줄인다.
+    // outline은 [왼쪽 아래, 오른쪽 아래, 오른쪽 위, 왼쪽 위] 순서다.
+    const leftX = Math.max(spec.outline[0][0], spec.outline[3][0]);
+    const rightX = Math.min(spec.outline[1][0], spec.outline[2][0]);
+    return {
+      x0: leftX + INSET,
+      x1: rightX - INSET,
+      y0: -height / 2 + (below ? -FILL : cut("b")),
+      y1: height / 2 - (above ? -FILL : cut("t")),
+    };
+  }
   return {
     x0: -width / 2 + (left ? -FILL : cut("l")),
     x1: width / 2 - (right ? -FILL : cut("r")),
@@ -81,18 +84,13 @@ export function createGlowCores(specs: BlockSpec[], color: THREE.Color) {
   const position = new THREE.Vector3();
   const rotation = new THREE.Quaternion();
   const scale = new THREE.Vector3();
-  const axis = new THREE.Vector3(0, 0, 1);
-  const boxCenter = new THREE.Vector2();
   cores.forEach((spec, index) => {
     const box = coreBox(spec, specs);
-    boxCenter.set((box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2);
-    boxCenter.rotateAround(new THREE.Vector2(0, 0), spec.rotation);
     position.set(
-      spec.center[0] + boxCenter.x,
-      spec.center[1] + boxCenter.y,
+      spec.center[0] + (box.x0 + box.x1) / 2,
+      spec.center[1] + (box.y0 + box.y1) / 2,
       spec.center[2] - 0.01,
     );
-    rotation.setFromAxisAngle(axis, spec.rotation);
     scale.set(box.x1 - box.x0, box.y1 - box.y0, spec.size[2] * 0.58);
     mesh.setMatrixAt(index, matrix.compose(position, rotation, scale));
     // 틈마다 밝기를 다르게 해 같은 두께의 LED 막대처럼 보이지 않게 한다.

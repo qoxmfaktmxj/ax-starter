@@ -160,43 +160,68 @@ def chisel_facets(bm, width, height, depth, seed, corner):
         cut += 1
 
 
+def prism_mesh(bm, outline, depth):
+    # 로고 윤곽을 앞뒤로 depth만큼 세운 각기둥. 블렌더 x = 윤곽 x, z = 윤곽 y, y = 두께 방향.
+    front = [bm.verts.new((x, -depth / 2, y)) for x, y in outline]
+    back = [bm.verts.new((x, depth / 2, y)) for x, y in outline]
+    bm.faces.new(front)
+    bm.faces.new(back)
+    count = len(outline)
+    for i in range(count):
+        j = (i + 1) % count
+        bm.faces.new((front[i], front[j], back[j], back[i]))
+    bm.normal_update()
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+
+
 def base_mesh(name, spec, seed):
     width, height, depth = spec["size"]
-    bm = bmesh.new()
-    bmesh.ops.create_cube(bm, size=1.0)
-    for vert in bm.verts:
-        vert.co.x *= width
-        vert.co.y *= depth
-        vert.co.z *= height
     corner = spec["corner"]
-    if corner != "none":
-        # 로고에서 둥근 바깥 모서리: 두께 방향 모서리 하나를 블록 크기만큼 크게 깎는다.
-        sx, sz = CORNER_SIGN[corner]
-        edges = [
-            edge
-            for edge in bm.edges
-            if all(
-                abs(vert.co.x - sx * width / 2) < 1e-5
-                and abs(vert.co.z - sz * height / 2) < 1e-5
-                for vert in edge.verts
+    outline = spec.get("outline")
+    bm = bmesh.new()
+    chip_ratio = None
+    if outline:
+        prism_mesh(bm, outline, depth)
+        raw_volume = bm.calc_volume(signed=False)
+        chip_corners(bm, width, height, depth, seed, corner)
+        chisel_facets(bm, width, height, depth, seed, corner)
+        cut_volume = bm.calc_volume(signed=False)
+        chip_ratio = cut_volume / raw_volume if raw_volume > 0 else 1.0
+    else:
+        bmesh.ops.create_cube(bm, size=1.0)
+        for vert in bm.verts:
+            vert.co.x *= width
+            vert.co.y *= depth
+            vert.co.z *= height
+        if corner != "none":
+            # 로고에서 둥근 바깥 모서리: 두께 방향 모서리 하나를 블록 크기만큼 크게 깎는다.
+            # (outline 블록은 항상 corner가 none이라 이 처리를 받지 않는다.)
+            sx, sz = CORNER_SIGN[corner]
+            edges = [
+                edge
+                for edge in bm.edges
+                if all(
+                    abs(vert.co.x - sx * width / 2) < 1e-5
+                    and abs(vert.co.z - sz * height / 2) < 1e-5
+                    for vert in edge.verts
+                )
+            ]
+            bmesh.ops.bevel(
+                bm,
+                geom=edges,
+                offset=min(width, height) * 0.9,
+                offset_type="OFFSET",
+                segments=16,
+                profile=0.5,
+                affect="EDGES",
+                clamp_overlap=False,
             )
-        ]
-        bmesh.ops.bevel(
-            bm,
-            geom=edges,
-            offset=min(width, height) * 0.9,
-            offset_type="OFFSET",
-            segments=16,
-            profile=0.5,
-            affect="EDGES",
-            clamp_overlap=False,
-        )
-    chip_corners(bm, width, height, depth, seed, corner)
-    chisel_facets(bm, width, height, depth, seed, corner)
+        chip_corners(bm, width, height, depth, seed, corner)
+        chisel_facets(bm, width, height, depth, seed, corner)
     mesh = bpy.data.meshes.new(name)
     bm.to_mesh(mesh)
     bm.free()
-    return mesh
+    return mesh, chip_ratio
 
 
 def apply_modifiers(obj):
@@ -238,6 +263,7 @@ def sculpt(obj, spec, seed):
     apply_modifiers(obj)
 
     half = Vector((width / 2, depth / 2, height / 2))
+    lump_scale = 0.35 if spec.get("outline") else 1.0
     offset = Vector((seed * 3.1, seed * 1.7, seed * 5.3))
     bm = bmesh.new()
     bm.from_mesh(obj.data)
@@ -258,12 +284,16 @@ def sculpt(obj, spec, seed):
             ),
         )
         # 두 겹 굴곡: 저주파(큰 완만한 융기/패임)와 고주파(작은 곰보 자국)를 더한다.
+        # outline 블록은 비스듬한 면 절단으로 국소적으로 얇아진 곳이 있어 절반 진폭만 쓴다.
         lump_low = (
-            max(-1.5, min(1.5, noise.fractal(p * 1.0 + offset, 0.9, 2.0, 3))) * LUMP_LOW
+            max(-1.5, min(1.5, noise.fractal(p * 1.0 + offset, 0.9, 2.0, 3)))
+            * LUMP_LOW
+            * lump_scale
         )
         lump_high = (
             max(-1.5, min(1.5, noise.fractal(p * 5.0 + offset * 1.7, 0.7, 2.1, 3)))
             * LUMP_HIGH
+            * lump_scale
         )
         # 모서리 근처에만 고주파 잔부스러기를 더한다.
         crumble = noise.noise(p * 18.0 + offset) * 0.006 * edge
@@ -301,7 +331,6 @@ def unwrap(obj):
 def place(obj, spec):
     x, y, z = spec["center"]
     obj.location = (x, -z, y)
-    obj.rotation_euler = (0.0, -spec["rotation"], 0.0)
 
 
 def prepare_colors(obj):
@@ -432,10 +461,15 @@ def main():
     blocks = []
     total_inward = 0
     total_degenerate = 0
+    chip_ratios = []
     for index, spec in enumerate(layout):
         name = f"block-{index:02d}"
         seed = index + 1
-        obj = bpy.data.objects.new(name, base_mesh(name, spec, seed))
+        mesh, chip_ratio = base_mesh(name, spec, seed)
+        if chip_ratio is not None:
+            print(f"ISU_BLOCKS block={name} chip_ratio={chip_ratio:.3f}")
+            chip_ratios.append(chip_ratio)
+        obj = bpy.data.objects.new(name, mesh)
         bpy.context.collection.objects.link(obj)
         inward, degenerate = sculpt(obj, spec, seed)
         total_inward += inward
@@ -450,6 +484,8 @@ def main():
     triangles = sum(sum(len(p.vertices) - 2 for p in obj.data.polygons) for obj in blocks)
     print(f"ISU_BLOCKS blocks={len(blocks)} triangles={triangles}")
     print(f"ISU_BLOCKS inward={total_inward} degenerate={total_degenerate}")
+    if chip_ratios:
+        print(f"ISU_BLOCKS chip_ratio_min={min(chip_ratios):.3f}")
     export(blocks, args.out)
     print(f"ISU_BLOCKS glb={os.path.getsize(args.out)} bytes")
     if args.preview:

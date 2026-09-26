@@ -21,10 +21,10 @@ describe("ISU block layout measured from the logo", () => {
     ];
   };
 
-  it("uses 26 blocks: I 5 plus the green dot, S 9, U 11", () => {
-    expect(blocks).toHaveLength(26);
+  it("uses 27 blocks: I 6, S 10, U 11", () => {
+    expect(blocks).toHaveLength(27);
     expect(byLetter("i")).toHaveLength(6);
-    expect(byLetter("s")).toHaveLength(9);
+    expect(byLetter("s")).toHaveLength(10);
     expect(byLetter("u")).toHaveLength(11);
   });
 
@@ -81,17 +81,67 @@ describe("ISU block layout measured from the logo", () => {
     expect(corners).toEqual(["s:br", "s:tl", "u:bl", "u:br"]);
   });
 
-  it("marks the bottom course and tilts the S spine", () => {
+  it("marks the bottom course", () => {
     const bottom = blocks.filter((block) => block.course === 0);
     expect(bottom).toHaveLength(7);
     for (const block of bottom)
       expect(blockBounds(block).min[1]).toBeCloseTo(BLOCK_GAP / 2, 6);
-    const tilted = blocks.filter((block) => block.rotation !== 0);
-    expect(tilted).toHaveLength(3);
-    for (const block of tilted) {
-      expect(block.letter).toBe("s");
-      expect(block.rotation).toBeGreaterThan((-60 * Math.PI) / 180);
-      expect(block.rotation).toBeLessThan((-40 * Math.PI) / 180);
+  });
+
+  it("S middle courses are slanted slabs that follow the logo", () => {
+    for (const block of blocks) expect("rotation" in block).toBe(false);
+
+    const slanted = blocks.filter((block) => block.outline);
+    expect(slanted).toHaveLength(4);
+    for (const block of slanted) expect(block.letter).toBe("s");
+
+    // world-space outline points; BlockSpec stores outline relative to center.
+    const worldPoints = (block: (typeof blocks)[number]) =>
+      block.outline!.map(
+        ([x, y]) => [x + block.center[0], y + block.center[1]] as const,
+      );
+    const courses = slanted
+      .map((block) => {
+        const points = worldPoints(block);
+        const ys = points.map(([, y]) => y);
+        const topY = Math.max(...ys);
+        const bottomY = Math.min(...ys);
+        const top = points.filter(([, y]) => y === topY);
+        const bottom = points.filter(([, y]) => y === bottomY);
+        return { top, bottom, topY, bottomY };
+      })
+      // top to bottom: the highest course has the largest world y.
+      .sort((a, b) => b.topY - a.topY);
+
+    for (const { top, bottom } of courses) {
+      expect(top).toHaveLength(2);
+      expect(bottom).toHaveLength(2);
+      expect(top[0][1]).toBeCloseTo(top[1][1], 6);
+      expect(bottom[0][1]).toBeCloseTo(bottom[1][1], 6);
+    }
+    for (let index = 0; index < courses.length - 1; index++) {
+      const gap = courses[index].bottomY - courses[index + 1].topY;
+      expect(gap).toBeCloseTo(BLOCK_GAP, 6);
+    }
+    // within each course the slanted side moves right from top to bottom,
+    // and that rightward drift keeps going from one course's bottom edge to the next's.
+    const bottomLeftX = (course: (typeof courses)[number]) =>
+      Math.min(...course.bottom.map(([x]) => x));
+    const bottomRightX = (course: (typeof courses)[number]) =>
+      Math.max(...course.bottom.map(([x]) => x));
+    for (const course of courses) {
+      const topLeftX = Math.min(...course.top.map(([x]) => x));
+      const topRightX = Math.max(...course.top.map(([x]) => x));
+      expect(bottomLeftX(course)).toBeGreaterThan(topLeftX);
+      expect(bottomRightX(course)).toBeGreaterThan(topRightX);
+    }
+    for (let index = 0; index < courses.length - 1; index++) {
+      expect(bottomLeftX(courses[index + 1])).toBeGreaterThan(
+        bottomLeftX(courses[index]),
+      );
+      expect(bottomRightX(courses[index + 1])).toBeGreaterThan(
+        bottomRightX(courses[index]),
+      );
     }
   });
 });

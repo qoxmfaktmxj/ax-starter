@@ -10,12 +10,12 @@ export type BlockSpec = {
   /** 0이 맨 아래 단 */
   course: number;
   center: Vec3;
-  /** 회전 전 폭, 높이, 두께 */
+  /** 폭, 높이, 두께 */
   size: Vec3;
-  /** z축 회전(라디안) */
-  rotation: number;
   /** 로고에서 크게 둥근 바깥 모서리 */
   corner: Corner;
+  /** 블록 중심 기준 앞면 윤곽(월드 좌표, 반시계 방향). 없으면 size 직사각형이다. */
+  outline?: [number, number][];
 };
 
 export const LETTER_HEIGHT = 3.1;
@@ -42,7 +42,6 @@ function block(
     dot,
     course,
     corner,
-    rotation: 0,
     center: [worldX((box.x0 + box.x1) / 2), worldY((box.y0 + box.y1) / 2), 0],
     size: [
       (box.x1 - box.x0) * PX - BLOCK_GAP,
@@ -98,58 +97,52 @@ function row(
   });
 }
 
-// 두 점을 잇는 획을 count개의 기울인 블록으로 나눈다. 위쪽 블록일수록 단 번호가 크다.
-function stroke(
+// 로고 윤곽을 따라 옆면을 비스듬히 깎은 단을 쌓는다. edges는 로고 좌표의
+// [y, 왼쪽 x, 오른쪽 x] 목록이고, 이웃한 두 줄마다 블록 하나를 만든다(단 번호는
+// 위에서부터 내림차순). 블록의 center와 size는 윤곽의 외접 직사각형을 틈 BLOCK_GAP / 2만큼
+// 안쪽으로 줄인 뒤의 값이고, outline도 같은 만큼 줄인 네 점(왼쪽 아래, 오른쪽 아래,
+// 오른쪽 위, 왼쪽 위, 반시계 방향)이다.
+function slants(
   letter: Letter,
-  from: [number, number],
-  to: [number, number],
-  thickness: number,
-  count: number,
-  topCourse: number,
+  edges: [number, number, number][],
 ): BlockSpec[] {
-  const dx = worldX(to[0]) - worldX(from[0]);
-  const dy = worldY(to[1]) - worldY(from[1]);
-  const length = Math.hypot(dx, dy);
-  const rotation = Math.atan2(dy, dx);
+  const half = BLOCK_GAP / 2;
+  const count = edges.length - 1;
   return Array.from({ length: count }, (_, index): BlockSpec => {
-    const t = (index + 0.5) / count;
+    const [topY, topLeftX, topRightX] = edges[index];
+    const [bottomY, bottomLeftX, bottomRightX] = edges[index + 1];
+    const corners: [number, number][] = [
+      [worldX(bottomLeftX) + half, worldY(bottomY) + half], // bottom left
+      [worldX(bottomRightX) - half, worldY(bottomY) + half], // bottom right
+      [worldX(topRightX) - half, worldY(topY) - half], // top right
+      [worldX(topLeftX) + half, worldY(topY) - half], // top left
+    ];
+    const xs = corners.map(([x]) => x);
+    const ys = corners.map(([, y]) => y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const center: Vec3 = [(minX + maxX) / 2, (minY + maxY) / 2, 0];
     return {
       letter,
       dot: false,
-      course: topCourse - index,
+      course: count - index,
       corner: "none",
-      rotation,
-      center: [worldX(from[0]) + dx * t, worldY(from[1]) + dy * t, 0],
-      size: [
-        length / count - BLOCK_GAP,
-        thickness * PX - BLOCK_GAP,
-        BLOCK_DEPTH,
-      ],
+      center,
+      size: [maxX - minX, maxY - minY, BLOCK_DEPTH],
+      outline: corners.map(([x, y]) => [x - center[0], y - center[1]]),
     };
   });
 }
 
+// 회전이 없으니 center와 size만으로 계산한다.
 export function blockBounds(spec: BlockSpec): { min: Vec3; max: Vec3 } {
   const [cx, cy, cz] = spec.center;
   const [width, height, depth] = spec.size;
-  const cos = Math.cos(spec.rotation);
-  const sin = Math.sin(spec.rotation);
-  const xs: number[] = [];
-  const ys: number[] = [];
-  for (const [sx, sy] of [
-    [-1, -1],
-    [1, -1],
-    [1, 1],
-    [-1, 1],
-  ]) {
-    const x = (sx * width) / 2;
-    const y = (sy * height) / 2;
-    xs.push(cx + x * cos - y * sin);
-    ys.push(cy + x * sin + y * cos);
-  }
   return {
-    min: [Math.min(...xs), Math.min(...ys), cz - depth / 2],
-    max: [Math.max(...xs), Math.max(...ys), cz + depth / 2],
+    min: [cx - width / 2, cy - height / 2, cz - depth / 2],
+    max: [cx + width / 2, cy + height / 2, cz + depth / 2],
   };
 }
 
@@ -164,10 +157,16 @@ export function buildIsuLayout(): BlockSpec[] {
       "none",
       true,
     ),
-    // S: 윗막대(왼쪽 위 둥금), 대각선 획, 아랫막대(오른쪽 아래 둥금)
-    ...row("s", 4, 42, 76, 14, 28, 3, { first: "tl" }),
-    ...stroke("s", [51, 32], [66.5, 50.5], 16, 3, 3),
-    ...row("s", 0, 42, 77, 53, 67, 3, { last: "br" }),
+    // S: 윗막대(왼쪽 위 둥금), 로고 윤곽을 따라 옆면을 비스듬히 깎은 4단, 아랫막대(오른쪽 아래 둥금)
+    ...row("s", 5, 42, 75, 14, 28, 3, { first: "tl" }),
+    ...slants("s", [
+      [28, 42, 58.5],
+      [34.25, 43.3, 63.3],
+      [40.5, 48.5, 70.5],
+      [46.75, 55.8, 74.8],
+      [53, 59, 75],
+    ]),
+    ...row("s", 0, 42, 75, 53, 67, 3, { last: "br" }),
     // U: 두 기둥과 양쪽 아래가 둥근 바닥
     ...column("u", 88, 103, LOGO_TOP, 51, 4, 1),
     ...column("u", 112, 127, LOGO_TOP, 51, 4, 1),
