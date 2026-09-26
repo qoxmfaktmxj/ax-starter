@@ -10,9 +10,12 @@
 좌표: three (x, y, z)를 블렌더 (x, -z, y)로 둔다. glTF 내보내기의 export_yup이 되돌린다.
 정점 색 isu: R=AO, G=모서리 마모, B=블록별 색조 편차.
 
+말끔한 둥근 블록: 저해상도 블록은 코너 칩/끌 면/저주파 요철/모서리 부스러기 없이 모든
+모서리를 크게 둥글리고 앞면 가운데만 살짝 부풀린 매끈한 상자(또는 S의 비스듬한 각기둥)다.
+
 고해상도 조각과 굽기: 내보내는 저해상도 블록(sculpt() 완료본)을 복제해 VOXEL_HI로 다시
-리메시하고, 끌 자국/공동/서리 결 세 겹을 법선 방향으로 더한 뒤 저해상도 블록의 공유 UV
-아틀라스에 normal/AO/볼록도를 구워 담는다. 조각본은 내보내지 않는다.
+리메시하고, 고운 눈 결과 결 방향이 있는 서리 줄무늬 두 겹만 법선 방향으로 더한 뒤 저해상도
+블록의 공유 UV 아틀라스에 normal/AO/볼록도를 구워 담는다. 조각본은 내보내지 않는다.
 """
 
 import argparse
@@ -28,26 +31,25 @@ import bpy
 import numpy as np
 from mathutils import Vector, noise
 
-VOXEL = 0.028  # 리메시 해상도(월드 단위)
+VOXEL = 0.036  # 리메시 해상도(월드 단위)
 VOXEL_HI = 0.008  # 고해상도 조각본 리메시 해상도(월드 단위)
-BEVEL_MIN = 0.025  # 블록별 모서리 깎기 범위(최소)
-BEVEL_MAX = 0.05  # 블록별 모서리 깎기 범위(최대), 손으로 깎은 듯 블록마다 다르게
-LUMP_LOW = 0.028  # 저주파 굴곡(큰 완만한 융기/패임)
-LUMP_HIGH = 0.01  # 고주파 굴곡(작은 곰보 자국)
-CHIP_MIN = 1  # 블록당 코너 이 빠진 자국 최소 개수
-CHIP_MAX = 3  # 블록당 코너 이 빠진 자국 최대 개수
+BEVEL_RADIUS_RATIO = 0.15  # 모서리 둥글기 반경: 블록의 가장 짧은 변의 이 비율
+BEVEL_RADIUS_DEPTH_CAP = 0.30  # 반경이 두께(depth)의 이 비율을 넘지 않게 한다
+BEVEL_SEGMENTS = 6
+FRONT_BULGE_MAX = 0.015  # 앞면 가운데가 부풀어 오르는 최대 깊이(월드 단위)
 WEAR_GAIN = 6.0  # 곡률을 마모 값으로 바꾸는 배율
 CORNER_SIGN = {"tl": (-1, 1), "tr": (1, 1), "bl": (-1, -1), "br": (1, -1)}
 
-CHISEL_HI_MIN = 4  # 고해상도 끌 자국 블록당 최소 개수
-CHISEL_HI_MAX = 7  # 고해상도 끌 자국 블록당 최대 개수
-CAVITY_CELL = 0.06  # 공동 보로노이 셀 크기(월드 단위)
-FROST_AMPLITUDE = 0.0015  # 서리 결 진폭
+FROST_AMPLITUDE = 0.0012  # 고운 눈 결 진폭
+FROST_STREAK_AMPLITUDE = 0.002  # 결 방향이 있는 서리 줄무늬 진폭
 EDGE_PRESERVE_BAND = 0.02  # 윤곽 모서리에서 이 거리 안은 변위를 절반으로 줄인다
+DETAIL_DISPLACEMENT_LIMIT = 0.005  # 두 겹을 합친 변위의 절대값 한도(자기 접힘 방지)
 ATLAS_SIZE = 2048  # 질감 아틀라스 해상도(데스크톱)
 MOBILE_ATLAS_SIZE = ATLAS_SIZE // 2  # 모바일 축소본 해상도
 BAKE_CAGE_EXTRUSION = 0.015
 BAKE_MAX_RAY_DISTANCE = 0.03
+DETAIL_AO_DISTANCE = 0.25  # 디테일 AO 세계 조명 거리(이웃 블록/바닥 접촉 그늘을 담는다)
+DETAIL_AO_FLOOR = 0.3  # 정점 AO와 같은 바닥값(완전한 검은 구멍을 막는다)
 
 
 def parse_args():
@@ -77,114 +79,6 @@ def activate(obj):
     bpy.context.view_layer.objects.active = obj
 
 
-def chip_corners(bm, width, height, depth, seed, corner):
-    # 저해상도 상태에서 2~3개 코너를 평면으로 실제로 잘라내고 새 단면을 채운다.
-    # 로고 둥근 모서리(corner)와 같은 코너는 건너뛰어 둥근 윤곽을 지킨다. 모서리(edge) 이 자국은 만들지 않는다.
-    rng = random.Random(seed)
-    skip_xz = CORNER_SIGN.get(corner)
-    half = Vector((width / 2, depth / 2, height / 2))
-    target = rng.randint(CHIP_MIN, CHIP_MAX)
-    tried = set()
-    cut = 0
-    attempts = 0
-    while cut < target and attempts < 12:
-        attempts += 1
-        sx = 1.0 if rng.random() < 0.5 else -1.0
-        sy = -1.0 if rng.random() < 0.75 else 1.0
-        sz = 1.0 if rng.random() < 0.5 else -1.0
-        key = (sx, sy, sz)
-        if key in tried:
-            continue
-        tried.add(key)
-        if skip_xz is not None and (sx, sz) == (float(skip_xz[0]), float(skip_xz[1])):
-            continue
-        normal = Vector((sx, sy, sz)).normalized()
-        tilt = Vector(
-            (rng.uniform(-0.25, 0.25), rng.uniform(-0.25, 0.25), rng.uniform(-0.25, 0.25))
-        )
-        normal = (normal + tilt).normalized()
-        chip_depth = rng.uniform(0.06, 0.13)
-        corner_point = Vector((sx * half.x, sy * half.y, sz * half.z))
-        plane_co = corner_point - normal * chip_depth
-        result = bmesh.ops.bisect_plane(
-            bm,
-            geom=bm.verts[:] + bm.edges[:] + bm.faces[:],
-            plane_co=plane_co,
-            plane_no=normal,
-            clear_outer=True,
-        )
-        new_edges = [edge for edge in result["geom_cut"] if isinstance(edge, bmesh.types.BMEdge)]
-        if new_edges:
-            bmesh.ops.edgeloop_fill(bm, edges=new_edges)
-        cut += 1
-
-
-def chisel_facets(bm, width, height, depth, seed, corner):
-    # 저해상도 상태에서 면 하나에 걸쳐 크게 기운 평면 절단면(끌로 깎은 자국) 1~2개를 낸다.
-    # 앞면(-Y)을 우선하고(0.6), 위(+Z)나 옆(±X)도 고른다. 코너 이 자국(chip_corners)과는
-    # 독립된 시드 스트림을 써서 같은 첫 난수가 겹치지 않게 한다.
-    rng = random.Random(seed * 97 + 13)
-    skip_xz = CORNER_SIGN.get(corner)
-    half = Vector((width / 2, depth / 2, height / 2))
-    target = rng.randint(1, 2)
-    tried = set()
-    cut = 0
-    attempts = 0
-    while cut < target and attempts < 12:
-        attempts += 1
-        pick = rng.random()
-        if pick < 0.6:
-            face_axis = "front"
-            normal = Vector((0.0, -1.0, 0.0))
-            face_center = Vector((0.0, -half.y, 0.0))
-            in_plane, in_plane_size = rng.choice((("x", width), ("z", height)))
-        elif pick < 0.8:
-            face_axis = "top"
-            normal = Vector((0.0, 0.0, 1.0))
-            face_center = Vector((0.0, 0.0, half.z))
-            in_plane, in_plane_size = rng.choice((("x", width), ("y", depth)))
-        else:
-            face_axis = "side"
-            side_sign = 1.0 if rng.random() < 0.5 else -1.0
-            normal = Vector((side_sign, 0.0, 0.0))
-            face_center = Vector((side_sign * half.x, 0.0, 0.0))
-            in_plane, in_plane_size = rng.choice((("y", depth), ("z", height)))
-        shift_sign = 1.0 if rng.random() < 0.5 else -1.0
-        key = (face_axis, in_plane, shift_sign)
-        if key in tried:
-            continue
-        tried.add(key)
-        if (
-            face_axis == "front"
-            and skip_xz is not None
-            and (
-                (in_plane == "x" and shift_sign == float(skip_xz[0]))
-                or (in_plane == "z" and shift_sign == float(skip_xz[1]))
-            )
-        ):
-            # 로고 둥근 모서리 쪽으로 향하는 앞면 절단은 건너뛴다.
-            continue
-        axis_index = {"x": 0, "y": 1, "z": 2}[in_plane]
-        tilt_dir = Vector((0.0, 0.0, 0.0))
-        tilt_dir[axis_index] = shift_sign
-        theta = math.radians(rng.uniform(5.0, 10.0))
-        tilted_normal = (normal * math.cos(theta) + tilt_dir * math.sin(theta)).normalized()
-        chisel_depth = rng.uniform(0.035, 0.045)
-        edge_frac = rng.uniform(0.15, 0.35)
-        plane_co = face_center - normal * chisel_depth + tilt_dir * (edge_frac * in_plane_size)
-        result = bmesh.ops.bisect_plane(
-            bm,
-            geom=bm.verts[:] + bm.edges[:] + bm.faces[:],
-            plane_co=plane_co,
-            plane_no=tilted_normal,
-            clear_outer=True,
-        )
-        new_edges = [edge for edge in result["geom_cut"] if isinstance(edge, bmesh.types.BMEdge)]
-        if new_edges:
-            bmesh.ops.edgeloop_fill(bm, edges=new_edges)
-        cut += 1
-
-
 def prism_mesh(bm, outline, depth):
     # 로고 윤곽을 앞뒤로 depth만큼 세운 각기둥. 블렌더 x = 윤곽 x, z = 윤곽 y, y = 두께 방향.
     front = [bm.verts.new((x, -depth / 2, y)) for x, y in outline]
@@ -204,14 +98,8 @@ def base_mesh(name, spec, seed):
     corner = spec["corner"]
     outline = spec.get("outline")
     bm = bmesh.new()
-    chip_ratio = None
     if outline:
         prism_mesh(bm, outline, depth)
-        raw_volume = bm.calc_volume(signed=False)
-        chip_corners(bm, width, height, depth, seed, corner)
-        chisel_facets(bm, width, height, depth, seed, corner)
-        cut_volume = bm.calc_volume(signed=False)
-        chip_ratio = cut_volume / raw_volume if raw_volume > 0 else 1.0
     else:
         bmesh.ops.create_cube(bm, size=1.0)
         for vert in bm.verts:
@@ -241,12 +129,10 @@ def base_mesh(name, spec, seed):
                 affect="EDGES",
                 clamp_overlap=False,
             )
-        chip_corners(bm, width, height, depth, seed, corner)
-        chisel_facets(bm, width, height, depth, seed, corner)
     mesh = bpy.data.meshes.new(name)
     bm.to_mesh(mesh)
     bm.free()
-    return mesh, chip_ratio
+    return mesh
 
 
 def apply_modifiers(obj):
@@ -274,12 +160,25 @@ def quality_check(bm, half):
     return inward, degenerate
 
 
+def bulge_at(p, half, amplitude=FRONT_BULGE_MAX):
+    # 앞면(-Y) 가운데만 카메라 쪽으로 살짝 부풀린다(랜딩 blockGeometry()의 bulge와 같은 모양).
+    nx = max(-1.0, min(1.0, p.x / half.x)) if half.x > 1e-6 else 0.0
+    nz = max(-1.0, min(1.0, p.z / half.z)) if half.z > 1e-6 else 0.0
+    face_center = max(0.0, 1.0 - nx * nx) * max(0.0, 1.0 - nz * nz)
+    depth_t = max(0.0, min(1.0, -p.y / half.y)) if half.y > 1e-6 else 0.0
+    return face_center * depth_t**3 * amplitude
+
+
 def sculpt(obj, spec, seed):
     width, height, depth = spec["size"]
+    half = Vector((width / 2, depth / 2, height / 2))
     bevel = obj.modifiers.new("bevel", "BEVEL")
-    # 블록마다 손으로 깎은 듯 모서리 깎기 폭을 다르게 한다(시드로 결정론적).
-    bevel.width = random.Random(seed).uniform(BEVEL_MIN, BEVEL_MAX)
-    bevel.segments = 3
+    # 모든 모서리를 크게, 손으로 깎은 자국 없이 매끈하게 둥글린다. 반경은 가장 짧은 변의
+    # 15%(두께의 30%를 넘지 않게), 원형 단면 6분할.
+    radius = min(width, height, depth) * BEVEL_RADIUS_RATIO
+    radius = min(radius, depth * BEVEL_RADIUS_DEPTH_CAP)
+    bevel.width = radius
+    bevel.segments = BEVEL_SEGMENTS
     bevel.limit_method = "ANGLE"
     bevel.angle_limit = math.radians(40)
     remesh = obj.modifiers.new("remesh", "REMESH")
@@ -287,42 +186,11 @@ def sculpt(obj, spec, seed):
     remesh.voxel_size = VOXEL
     apply_modifiers(obj)
 
-    half = Vector((width / 2, depth / 2, height / 2))
-    lump_scale = 0.35 if spec.get("outline") else 1.0
-    offset = Vector((seed * 3.1, seed * 1.7, seed * 5.3))
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     bm.normal_update()
 
-    moves = []
-    for vert in bm.verts:
-        p = vert.co
-        # 두 축 이상이 끝에 가까운 곳을 모서리로 본다.
-        edge = max(
-            0.0,
-            min(
-                1.0,
-                smoothstep(0.72, 1.0, abs(p.x) / half.x)
-                + smoothstep(0.72, 1.0, abs(p.y) / half.y)
-                + smoothstep(0.72, 1.0, abs(p.z) / half.z)
-                - 1.0,
-            ),
-        )
-        # 두 겹 굴곡: 저주파(큰 완만한 융기/패임)와 고주파(작은 곰보 자국)를 더한다.
-        # outline 블록은 비스듬한 면 절단으로 국소적으로 얇아진 곳이 있어 절반 진폭만 쓴다.
-        lump_low = (
-            max(-1.5, min(1.5, noise.fractal(p * 1.0 + offset, 0.9, 2.0, 3)))
-            * LUMP_LOW
-            * lump_scale
-        )
-        lump_high = (
-            max(-1.5, min(1.5, noise.fractal(p * 5.0 + offset * 1.7, 0.7, 2.1, 3)))
-            * LUMP_HIGH
-            * lump_scale
-        )
-        # 모서리 근처에만 고주파 잔부스러기를 더한다.
-        crumble = noise.noise(p * 18.0 + offset) * 0.006 * edge
-        moves.append((vert, vert.normal.copy() * (lump_low + lump_high + crumble)))
+    moves = [(vert, vert.normal.copy() * bulge_at(vert.co, half)) for vert in bm.verts]
     for vert, move in moves:
         vert.co += move
     bm.normal_update()
@@ -353,90 +221,16 @@ def edge_factor_absolute(p, half, band=EDGE_PRESERVE_BAND):
     return max(0.0, min(1.0, nx + ny + nz - 1.0))
 
 
-def build_chisel_marks(half, seed):
-    # 블록당 4~7개의 얕은 홈 선분을 만든다. 앞면(-Y)을 우선(0.6), 위/옆은 고르게.
-    rng = random.Random(seed * 131 + 7)
-    count = rng.randint(CHISEL_HI_MIN, CHISEL_HI_MAX)
-    marks = []
-    for _ in range(count):
-        pick = rng.random()
-        if pick < 0.6:
-            normal = Vector((0.0, -1.0, 0.0))
-            u_axis, v_axis = Vector((1.0, 0.0, 0.0)), Vector((0.0, 0.0, 1.0))
-            u_extent, v_extent = half.x, half.z
-            plane_pos = Vector((0.0, -half.y, 0.0))
-        elif pick < 0.8:
-            normal = Vector((0.0, 0.0, 1.0))
-            u_axis, v_axis = Vector((1.0, 0.0, 0.0)), Vector((0.0, 1.0, 0.0))
-            u_extent, v_extent = half.x, half.y
-            plane_pos = Vector((0.0, 0.0, half.z))
-        else:
-            side = 1.0 if rng.random() < 0.5 else -1.0
-            normal = Vector((side, 0.0, 0.0))
-            u_axis, v_axis = Vector((0.0, 1.0, 0.0)), Vector((0.0, 0.0, 1.0))
-            u_extent, v_extent = half.y, half.z
-            plane_pos = Vector((side * half.x, 0.0, 0.0))
-        span = 0.7  # 홈 양 끝을 실루엣 모서리에서 조금 안쪽으로 둔다.
-        u0 = rng.uniform(-u_extent * span, u_extent * span)
-        v0 = rng.uniform(-v_extent * span, v_extent * span)
-        angle = rng.uniform(0.0, math.pi)
-        length = rng.uniform(0.3, 0.8) * min(u_extent, v_extent) * 2.0
-        u1 = max(-u_extent * span, min(u_extent * span, u0 + math.cos(angle) * length))
-        v1 = max(-v_extent * span, min(v_extent * span, v0 + math.sin(angle) * length))
-        marks.append(
-            {
-                "normal": normal,
-                "p0": plane_pos + u_axis * u0 + v_axis * v0,
-                "p1": plane_pos + u_axis * u1 + v_axis * v1,
-                "width": rng.uniform(0.04, 0.09),
-                "depth": rng.uniform(0.006, 0.014),
-            }
-        )
-    return marks
-
-
-def chisel_depth_at(marks, p, vertex_normal):
-    # 겹치는 홈은 깊이를 더하지 않고 가장 깊은 홈만 반영한다(실제 끌 자국도 겹쳐 판다고
-    # 두 배로 깊어지지 않는다). 더하면 여러 홈이 겹치는 자리에서 국소적으로 너무 깊어져
-    # 얇은 벽(윤곽 블록, 코너 칩 자국)이 자기 자신과 겹치는 접힘을 만든다.
-    deepest = 0.0
-    for mark in marks:
-        along = mark["p1"] - mark["p0"]
-        length_sq = along.length_squared
-        if length_sq < 1e-9:
-            continue
-        t = max(0.0, min(1.0, (p - mark["p0"]).dot(along) / length_sq))
-        closest = mark["p0"] + along * t
-        d = (p - closest).length
-        if d >= mark["width"]:
-            continue
-        cross_section = mark["depth"] * (1.0 - (d / mark["width"]) ** 2)
-        # 선분 양 끝 20%는 깊이를 줄여 자연스럽게 끝나게 한다.
-        taper = min(smoothstep(0.0, 0.2, t), 1.0 - smoothstep(0.8, 1.0, t))
-        # 그 면을 바라보는 정점에만 적용한다(다른 면으로 새지 않게).
-        facing = max(0.0, vertex_normal.dot(mark["normal"])) ** 2
-        deepest = max(deepest, cross_section * taper * facing)
-    return deepest
-
-
-def cavity_depth_at(p, offset, cell):
-    sample = (p + offset) / cell
-    distances, _points = noise.voronoi(sample.to_tuple())
-    d0 = distances[0] * cell
-    threshold = cell * 0.5 * 0.35
-    if d0 >= threshold:
-        return 0.0
-    t = d0 / threshold
-    depth = 0.008 * (1.0 - t) + 0.004 * t
-    # 경계(t=1)에서 깊이가 0.004에서 0으로 뚝 끊기면 그 자리 기울기가 복셀 크기보다
-    # 커져 표면이 접힌다. 마지막 30%(t 0.7~1.0) 구간에서 0으로 부드럽게 뺀다.
-    taper = smoothstep(1.0, 0.7, t)
-    return depth * taper
+def frost_streak_at(p, offset):
+    # 결 방향(세로, 블렌더 z)으로는 천천히, 가로/두께 방향으로는 빠르게 바뀌어 넓고 옅은
+    # 세로 줄무늬로 보인다(실제 서리가 중력 방향으로 흘러내리며 앉는 결을 흉내낸다).
+    stretched = Vector((p.x * 6.0, p.y * 6.0, p.z * 0.65)) + offset
+    return noise.fractal(stretched, 0.6, 2.0, 2) * FROST_STREAK_AMPLITUDE
 
 
 def build_hires_duplicate(obj, spec, seed):
     # 지금의 sculpt()까지 끝난 저해상도 블록을 복제해 VOXEL_HI로 다시 리메시하고
-    # 끌 자국/공동/서리 결 세 겹을 법선 방향으로 더한다. 윤곽 모서리 근처는 변위를 절반으로 줄인다.
+    # 고운 눈 결과 서리 줄무늬 두 겹만 법선 방향으로 더한다. 윤곽 모서리 근처는 변위를 절반으로 줄인다.
     width, height, depth = spec["size"]
     half = Vector((width / 2, depth / 2, height / 2))
     hires = obj.copy()
@@ -449,16 +243,11 @@ def build_hires_duplicate(obj, spec, seed):
     remesh.voxel_size = VOXEL_HI
     apply_modifiers(hires)
 
-    marks = build_chisel_marks(half, seed)
-    cavity_offset = Vector((seed * 7.3 + 11.0, seed * 11.9 + 5.0, seed * 4.1 + 2.0))
     frost_offset = Vector((seed * 3.1, seed * 1.7, seed * 5.3))
-    # 브리프의 홈/공동 깊이 범위를 그대로 정점 변위로 옮기면 VOXEL_HI(0.008) 한 걸음
-    # 사이의 기울기가 너무 가팔라 27블록 전체에서 표면이 자기 자신과 접혔다(quality_check
-    # inward>0). 윤곽(outline) 블록은 옆면이 비스듬히 깎여 더 얇아 배율을 더 줄인다.
-    # 실측(check_hires_quality 반복): 두 배율과 절대값 한도를 함께 낮춰야 27블록 전체
-    # inward=0 degenerate=0에 도달했다(자세한 값은 task-blender-detail-report.md 참고).
-    detail_scale = 0.12 if spec.get("outline") else 0.32
-    depth_limit = 0.0065
+    streak_offset = Vector((seed * 7.3 + 11.0, seed * 11.9 + 5.0, seed * 4.1 + 2.0))
+    # 윤곽(outline) 블록은 가장 짧은 변이 훨씬 얇아(S 비스듬한 단) 같은 진폭도 자기 자신과
+    # 더 쉽게 접힌다(실측: block-09, 0.5배에서도 hires_inward=2가 남았다). 1/4 진폭만 쓴다.
+    detail_scale = 0.25 if spec.get("outline") else 1.0
 
     bm = bmesh.new()
     bm.from_mesh(hires.data)
@@ -467,12 +256,11 @@ def build_hires_duplicate(obj, spec, seed):
     moves = []
     for vert in bm.verts:
         p = vert.co
-        chisel = -chisel_depth_at(marks, p, vert.normal)
-        cavity = -cavity_depth_at(p, cavity_offset, CAVITY_CELL)
         frost = noise.fractal(p * 40.0 + frost_offset, 0.9, 2.0, 3) * FROST_AMPLITUDE
-        total = (chisel + cavity + frost) * detail_scale
+        streak = frost_streak_at(p, streak_offset)
+        total = (frost + streak) * detail_scale
         total *= 1.0 - edge_factor_absolute(p, half) * 0.5
-        total = max(-depth_limit, min(depth_limit, total))
+        total = max(-DETAIL_DISPLACEMENT_LIMIT, min(DETAIL_DISPLACEMENT_LIMIT, total))
         moves.append((vert, vert.normal.copy() * total))
     for vert, move in moves:
         vert.co += move
@@ -497,7 +285,6 @@ def build_hires_duplicate(obj, spec, seed):
 
 def unwrap_atlas(blocks):
     # 내보내는 저해상도 블록 전부를 하나의 아틀라스(0~1)로 겹치지 않게 모은다.
-    # 기존 블록별 unwrap()을 대체한다.
     bpy.ops.object.select_all(action="DESELECT")
     for obj in blocks:
         obj.select_set(True)
@@ -592,6 +379,8 @@ def convexity_material():
 def bake_detail_atlas(blocks, layout, size, limit=None):
     # 조각본 선택, 저해상도 활성으로 블록마다 같은 이미지에 이어서 굽는다(첫 블록 뒤에는
     # 이미지를 지우지 않는다). 메모리를 아끼려고 블록 하나씩 조각본을 만들고 굽고 지운다.
+    # AO는 바닥면을 둔 채로, 다른 블록도 숨기지 않고 구워 이웃 블록/바닥 접촉 그늘이
+    # 담기게 한다(정점 색 R과 같은 0.3 바닥값으로 완전한 검은 구멍은 막는다).
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
@@ -606,7 +395,9 @@ def bake_detail_atlas(blocks, layout, size, limit=None):
     convexity_src_material = convexity_material()
 
     detail_world = bpy.data.worlds.new("detail-ao")
-    detail_world.light_settings.distance = 0.05
+    detail_world.light_settings.distance = DETAIL_AO_DISTANCE
+    bpy.ops.mesh.primitive_plane_add(size=30, location=(0, 0, 0))
+    ground = bpy.context.active_object
 
     targets = blocks if limit is None else blocks[:limit]
     hires_stats = []
@@ -636,13 +427,6 @@ def bake_detail_atlas(blocks, layout, size, limit=None):
             use_clear=first,
         )
 
-        # AO 굽기는 use_selected_to_active로 목표 표면을 고르지만, 가려짐 자체는
-        # 장면 전체를 본다. 다른 26개 블록이 그대로 있으면 이웃 블록의 접촉 그늘까지
-        # 이 디테일 AO에 함께 구워져(브리프가 정점 색 R에 맡긴 몫과 겹쳐) 넓은 면이
-        # 검게 죽는다. 이 굽기 동안만 다른 블록을 렌더링에서 숨긴다.
-        others = [block for block in blocks if block is not obj]
-        for other in others:
-            other.hide_render = True
         set_active_node(material, ao_node)
         scene.world = detail_world
         scene.cycles.samples = 32
@@ -653,8 +437,6 @@ def bake_detail_atlas(blocks, layout, size, limit=None):
             max_ray_distance=BAKE_MAX_RAY_DISTANCE,
             use_clear=first,
         )
-        for other in others:
-            other.hide_render = False
 
         set_active_node(material, convexity_node)
         scene.cycles.samples = 8
@@ -673,6 +455,7 @@ def bake_detail_atlas(blocks, layout, size, limit=None):
             f"ISU_BLOCKS hires block={obj.name} triangles={tri_count} bake_time={elapsed:.1f}s"
         )
 
+    bpy.data.objects.remove(ground, do_unlink=True)
     return normal_image, ao_image, convexity_image, hires_stats
 
 
@@ -687,12 +470,9 @@ def combine_detail_image(ao_image, convexity_image, size):
     convexity = convexity.reshape(-1, 4)
     detail_image = new_atlas_image("isu-blocks-detail", size)
     out = np.zeros_like(ao)
-    # 작은 세계 조명 거리(0.05)로도 코너 칩/끌 절단면처럼 이미 저해상도 단계에서 깊게
-    # 파낸 자리는 완전히 검게(AO~0) 구워진다. 그 몫은 정점 색 R(접촉 그늘)이 이미 맡고
-    # 있으므로, 이 디테일 AO가 완전한 검은 구멍으로 보이지 않게 아래로 한도를 둔다(기존
-    # 정점 AO가 쓰는 0.3 바닥과 맞춘다). 얕은 새 끌 자국/공동은 이 바닥까지 내려가지 않아
-    # 대비가 줄지 않는다.
-    out[:, 0] = np.maximum(ao[:, 0], 0.3)
+    # 이웃 블록/바닥 접촉 그늘까지 담아 완전히 검게 구워질 수 있는 자리가 있어, 정점 AO가
+    # 쓰는 바닥값(0.3)과 맞춰 완전한 검은 구멍으로 보이지 않게 한다.
+    out[:, 0] = np.maximum(ao[:, 0], DETAIL_AO_FLOOR)
     out[:, 1] = convexity[:, 0]
     out[:, 2] = 0.0
     out[:, 3] = 1.0
@@ -893,14 +673,10 @@ def main():
     blocks = []
     total_inward = 0
     total_degenerate = 0
-    chip_ratios = []
     for index, spec in enumerate(layout):
         name = f"block-{index:02d}"
         seed = index + 1
-        mesh, chip_ratio = base_mesh(name, spec, seed)
-        if chip_ratio is not None:
-            print(f"ISU_BLOCKS block={name} chip_ratio={chip_ratio:.3f}")
-            chip_ratios.append(chip_ratio)
+        mesh = base_mesh(name, spec, seed)
         obj = bpy.data.objects.new(name, mesh)
         bpy.context.collection.objects.link(obj)
         inward, degenerate = sculpt(obj, spec, seed)
@@ -922,8 +698,6 @@ def main():
     triangles = sum(sum(len(p.vertices) - 2 for p in obj.data.polygons) for obj in blocks)
     print(f"ISU_BLOCKS blocks={len(blocks)} triangles={triangles}")
     print(f"ISU_BLOCKS inward={total_inward} degenerate={total_degenerate}")
-    if chip_ratios:
-        print(f"ISU_BLOCKS chip_ratio_min={min(chip_ratios):.3f}")
 
     configure_raw_image_settings(bpy.context.scene)
     models_dir = os.path.dirname(os.path.abspath(args.out))
