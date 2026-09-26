@@ -132,6 +132,7 @@ export async function createIsuScene(
     throw new DOMException("Scene initialization cancelled", "AbortError");
   const mobile = window.matchMedia("(pointer: coarse)").matches;
   const texturePath = mobile ? "/images/login/mobile" : "/images/login";
+  const modelTexturePath = mobile ? "/models/mobile" : "/models";
   const renderer = new THREE.WebGLRenderer({
     canvas,
     alpha: false,
@@ -148,6 +149,8 @@ export async function createIsuScene(
       `${texturePath}/aerial_rocks_02-diffuse.webp`,
       `${texturePath}/aerial_rocks_02-nor_gl.webp`,
       `${texturePath}/snow_02-diffuse.webp`,
+      `${modelTexturePath}/isu-blocks-normal.webp`,
+      `${modelTexturePath}/isu-blocks-detail.webp`,
     ].map(
       (url) =>
         new Promise<void>((resolve, reject) => {
@@ -159,7 +162,15 @@ export async function createIsuScene(
       !signal.aborted &&
       results.every((result) => result.status === "fulfilled"),
   );
-  const [frost, bump, terrainMap, terrainBump, snowAlbedo] = textures;
+  const [
+    frost,
+    bump,
+    terrainMap,
+    terrainBump,
+    snowAlbedo,
+    blockNormal,
+    blockDetail,
+  ] = textures;
   let shaderFailed = false;
   renderer.debug.onShaderError = () => {
     shaderFailed = true;
@@ -221,6 +232,7 @@ export async function createIsuScene(
     tint: { value: TUNE.iceTint },
   };
   const maps = { frost, bump };
+  const blockMaps = { normal: blockNormal, detail: blockDetail };
 
   terrainMap.colorSpace = THREE.SRGBColorSpace;
   for (const texture of [terrainMap, terrainBump]) {
@@ -338,6 +350,7 @@ export async function createIsuScene(
       ? createDotShellMaterial(maps, iceShared, TUNE.lime)
       : createIceMaterial(
           maps,
+          blockMaps,
           iceShared,
           TUNE.isuBlue,
           spec.size,

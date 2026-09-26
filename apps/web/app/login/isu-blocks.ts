@@ -37,6 +37,8 @@ export type IceShared = {
 };
 
 type IceMaps = { frost: THREE.Texture; bump: THREE.Texture };
+// 블렌더에서 구운 아틀라스 질감. normal은 접선 공간 법선, detail은 R=디테일 AO, G=볼록도.
+type BlockDetailMaps = { normal: THREE.Texture; detail: THREE.Texture };
 
 // 등장: 윤곽선만 보이다가 재질이 위에서 아래로 차오른다(랜딩 arctic-scene.ts와 같은 방식).
 function addReveal(shader: Shader, reveal: { value: number }) {
@@ -72,6 +74,7 @@ function addIceSurface(
   shared: IceShared,
   half: THREE.Vector3,
   sides: [number, number, number, number],
+  detailMap: THREE.Texture,
 ) {
   shader.uniforms.uIceGlow = shared.glow;
   shader.uniforms.uSnow = shared.snow;
@@ -80,6 +83,7 @@ function addIceSurface(
   shader.uniforms.uIceTint = shared.tint;
   shader.uniforms.uIceHalf = { value: half };
   shader.uniforms.uIceSides = { value: new THREE.Vector4(...sides) };
+  shader.uniforms.uDetailMap = { value: detailMap };
   shader.vertexShader = shader.vertexShader
     .replace(
       "#include <common>",
@@ -96,7 +100,7 @@ function addIceSurface(
   shader.fragmentShader = shader.fragmentShader
     .replace(
       "#include <common>",
-      "#include <common>\nuniform vec3 uIceGlow; uniform vec3 uSnow; uniform float uSeam; uniform vec3 uSeamColor; uniform float uIceTint; uniform vec3 uIceHalf; uniform vec4 uIceSides; varying vec4 vIceBake; varying vec3 vIceWorld; varying vec3 vIceNormal; varying vec3 vIceLocal;",
+      "#include <common>\nuniform vec3 uIceGlow; uniform vec3 uSnow; uniform float uSeam; uniform vec3 uSeamColor; uniform float uIceTint; uniform vec3 uIceHalf; uniform vec4 uIceSides; uniform sampler2D uDetailMap; varying vec4 vIceBake; varying vec3 vIceWorld; varying vec3 vIceNormal; varying vec3 vIceLocal;",
     )
     .replace(
       "#include <map_fragment>",
@@ -106,11 +110,15 @@ function addIceSurface(
       float tint = vIceBake.b;
       float frostGrain = texture2D(map, vMapUv * 2.0).r;
       float fineGrain = texture2D(map, vIceWorld.xy * .9 + vIceWorld.z * .37).g;
+      vec2 sculptDetail = texture2D(uDetailMap, vNormalMapUv).rg;
       vec3 blueDeep = diffuse * .55;
       vec3 blueLight = diffuse * 1.15;
       vec3 stone = mix(blueDeep, blueLight, smoothstep(.15, .85, frostGrain * .6 + fineGrain * .25 + tint * .15));
       float blotch = texture2D(map, vIceWorld.xy * .25 + vIceWorld.z * .11).b;
       stone *= .8 + blotch * .4;
+      // 조각본에서 구운 끌 자국/공동 그늘(R)과 볼록한 곳의 서리 하이라이트(G, 윗면만, 최대 0.2).
+      stone *= mix(.55, 1., sculptDetail.r);
+      stone = mix(stone, uSnow, smoothstep(.4, .9, vIceNormal.y) * sculptDetail.g * .2);
       float snowCover = smoothstep(.5, .9, vIceNormal.y) * (.55 + .45 * fineGrain);
       stone = mix(stone, uSnow, snowCover * .6);
       stone = mix(stone, vec3(.8, .92, 1.), smoothstep(.25, .75, wear) * .3 * smoothstep(.1, .6, vIceNormal.y));
@@ -126,7 +134,10 @@ function addIceSurface(
       `#include <emissivemap_fragment>
       float frostRim = pow(1. - max(0., dot(normalize(vNormal), normalize(vViewPosition))), 4.);
       totalEmissiveRadiance += uIceGlow * (frostRim * .08 * bakedAo + wear * wear * .12) * .5;
-      totalEmissiveRadiance += diffuse * uIceTint * mix(.4, 1., bakedAo);
+      // 구운 법선과 디테일 AO가 파랑 발광에도 걸리게 해 끌 자국과 공동이 보이게 한다.
+      vec3 iceN = normalize((vec4(normal, 0.) * viewMatrix).xyz);
+      float iceKey = clamp(dot(iceN, normalize(vec3(-.46, .69, .54))), 0., 1.);
+      totalEmissiveRadiance += diffuse * uIceTint * mix(.4, 1., bakedAo) * mix(.5, 1., sculptDetail.r) * mix(.55, 1.2, iceKey);
       float seamReach = uIceHalf.y * .18;
       float spill = max(
         max(uIceSides.x * (1. - smoothstep(0., seamReach, vIceLocal.x + uIceHalf.x)),
@@ -139,6 +150,7 @@ function addIceSurface(
 
 export function createIceMaterial(
   maps: IceMaps,
+  blockMaps: BlockDetailMaps,
   shared: IceShared,
   color: THREE.Color,
   size: Vec3,
@@ -147,14 +159,14 @@ export function createIceMaterial(
   const material = new THREE.MeshStandardMaterial({
     color,
     map: maps.frost,
-    normalMap: maps.bump,
-    normalScale: new THREE.Vector2(0.8, 0.8),
+    normalMap: blockMaps.normal,
+    normalScale: new THREE.Vector2(1.0, 1.0),
     roughness: 0.6,
     metalness: 0,
   });
   const half = new THREE.Vector3(size[0] / 2, size[1] / 2, size[2] / 2);
   material.onBeforeCompile = (shader) => {
-    addIceSurface(shader, shared, half, sides);
+    addIceSurface(shader, shared, half, sides, blockMaps.detail);
     addReveal(shader, shared.reveal);
   };
   material.customProgramCacheKey = () => "isu-ice";

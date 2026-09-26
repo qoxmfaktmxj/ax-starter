@@ -4,10 +4,15 @@
   blender -b --factory-startup --python tools/blender/build_isu_blocks.py -- \
     --layout tools/blender/isu-layout.json \
     --out apps/web/public/models/isu-blocks.glb \
-    --preview output/blender/isu-blocks-preview.png
+    --preview output/blender/isu-blocks-preview.png \
+    --closeup output/blender/isu-blocks-closeup.png
 
 좌표: three (x, y, z)를 블렌더 (x, -z, y)로 둔다. glTF 내보내기의 export_yup이 되돌린다.
 정점 색 isu: R=AO, G=모서리 마모, B=블록별 색조 편차.
+
+고해상도 조각과 굽기: 내보내는 저해상도 블록(sculpt() 완료본)을 복제해 VOXEL_HI로 다시
+리메시하고, 끌 자국/공동/서리 결 세 겹을 법선 방향으로 더한 뒤 저해상도 블록의 공유 UV
+아틀라스에 normal/AO/볼록도를 구워 담는다. 조각본은 내보내지 않는다.
 """
 
 import argparse
@@ -16,12 +21,15 @@ import math
 import os
 import random
 import sys
+import time
 
 import bmesh
 import bpy
+import numpy as np
 from mathutils import Vector, noise
 
 VOXEL = 0.028  # 리메시 해상도(월드 단위)
+VOXEL_HI = 0.008  # 고해상도 조각본 리메시 해상도(월드 단위)
 BEVEL_MIN = 0.025  # 블록별 모서리 깎기 범위(최소)
 BEVEL_MAX = 0.05  # 블록별 모서리 깎기 범위(최대), 손으로 깎은 듯 블록마다 다르게
 LUMP_LOW = 0.028  # 저주파 굴곡(큰 완만한 융기/패임)
@@ -31,6 +39,14 @@ CHIP_MAX = 3  # 블록당 코너 이 빠진 자국 최대 개수
 WEAR_GAIN = 6.0  # 곡률을 마모 값으로 바꾸는 배율
 CORNER_SIGN = {"tl": (-1, 1), "tr": (1, 1), "bl": (-1, -1), "br": (1, -1)}
 
+CHISEL_HI_MIN = 4  # 고해상도 끌 자국 블록당 최소 개수
+CHISEL_HI_MAX = 7  # 고해상도 끌 자국 블록당 최대 개수
+CAVITY_CELL = 0.06  # 공동 보로노이 셀 크기(월드 단위)
+FROST_AMPLITUDE = 0.0015  # 서리 결 진폭
+EDGE_PRESERVE_BAND = 0.02  # 윤곽 모서리에서 이 거리 안은 변위를 절반으로 줄인다
+ATLAS_SIZE = 2048  # 질감 아틀라스 해상도(데스크톱)
+MOBILE_ATLAS_SIZE = ATLAS_SIZE // 2  # 모바일 축소본 해상도
+
 
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
@@ -38,6 +54,13 @@ def parse_args():
     parser.add_argument("--layout", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--preview")
+    parser.add_argument("--closeup")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="고해상도 조각+굽기를 앞쪽 N개 블록에만 적용한다(시간 측정용 테스트 전용).",
+    )
     return parser.parse_args(argv)
 
 
@@ -320,11 +343,148 @@ def sculpt(obj, spec, seed):
     return inward, degenerate
 
 
-def unwrap(obj):
-    activate(obj)
+def edge_factor_absolute(p, half, band=EDGE_PRESERVE_BAND):
+    # half.x/y/z 경계에서 band 거리 안, 그것도 두 축 이상이 동시에 경계에 가까운 곳(=모서리)만 1에 가깝다.
+    nx = smoothstep(half.x - band, half.x, abs(p.x))
+    ny = smoothstep(half.y - band, half.y, abs(p.y))
+    nz = smoothstep(half.z - band, half.z, abs(p.z))
+    return max(0.0, min(1.0, nx + ny + nz - 1.0))
+
+
+def build_chisel_marks(half, seed):
+    # 블록당 4~7개의 얕은 홈 선분을 만든다. 앞면(-Y)을 우선(0.6), 위/옆은 고르게.
+    rng = random.Random(seed * 131 + 7)
+    count = rng.randint(CHISEL_HI_MIN, CHISEL_HI_MAX)
+    marks = []
+    for _ in range(count):
+        pick = rng.random()
+        if pick < 0.6:
+            normal = Vector((0.0, -1.0, 0.0))
+            u_axis, v_axis = Vector((1.0, 0.0, 0.0)), Vector((0.0, 0.0, 1.0))
+            u_extent, v_extent = half.x, half.z
+            plane_pos = Vector((0.0, -half.y, 0.0))
+        elif pick < 0.8:
+            normal = Vector((0.0, 0.0, 1.0))
+            u_axis, v_axis = Vector((1.0, 0.0, 0.0)), Vector((0.0, 1.0, 0.0))
+            u_extent, v_extent = half.x, half.y
+            plane_pos = Vector((0.0, 0.0, half.z))
+        else:
+            side = 1.0 if rng.random() < 0.5 else -1.0
+            normal = Vector((side, 0.0, 0.0))
+            u_axis, v_axis = Vector((0.0, 1.0, 0.0)), Vector((0.0, 0.0, 1.0))
+            u_extent, v_extent = half.y, half.z
+            plane_pos = Vector((side * half.x, 0.0, 0.0))
+        span = 0.7  # 홈 양 끝을 실루엣 모서리에서 조금 안쪽으로 둔다.
+        u0 = rng.uniform(-u_extent * span, u_extent * span)
+        v0 = rng.uniform(-v_extent * span, v_extent * span)
+        angle = rng.uniform(0.0, math.pi)
+        length = rng.uniform(0.3, 0.8) * min(u_extent, v_extent) * 2.0
+        u1 = max(-u_extent * span, min(u_extent * span, u0 + math.cos(angle) * length))
+        v1 = max(-v_extent * span, min(v_extent * span, v0 + math.sin(angle) * length))
+        marks.append(
+            {
+                "normal": normal,
+                "p0": plane_pos + u_axis * u0 + v_axis * v0,
+                "p1": plane_pos + u_axis * u1 + v_axis * v1,
+                "width": rng.uniform(0.04, 0.09),
+                "depth": rng.uniform(0.006, 0.014),
+            }
+        )
+    return marks
+
+
+def chisel_depth_at(marks, p, vertex_normal):
+    total = 0.0
+    for mark in marks:
+        along = mark["p1"] - mark["p0"]
+        length_sq = along.length_squared
+        if length_sq < 1e-9:
+            continue
+        t = max(0.0, min(1.0, (p - mark["p0"]).dot(along) / length_sq))
+        closest = mark["p0"] + along * t
+        d = (p - closest).length
+        if d >= mark["width"]:
+            continue
+        cross_section = mark["depth"] * (1.0 - (d / mark["width"]) ** 2)
+        # 선분 양 끝 20%는 깊이를 줄여 자연스럽게 끝나게 한다.
+        taper = min(smoothstep(0.0, 0.2, t), 1.0 - smoothstep(0.8, 1.0, t))
+        # 그 면을 바라보는 정점에만 적용한다(다른 면으로 새지 않게).
+        facing = max(0.0, vertex_normal.dot(mark["normal"])) ** 2
+        total += cross_section * taper * facing
+    return total
+
+
+def cavity_depth_at(p, offset, cell):
+    sample = (p + offset) / cell
+    distances, _points = noise.voronoi(sample.to_tuple())
+    d0 = distances[0] * cell
+    threshold = cell * 0.5 * 0.35
+    if d0 >= threshold:
+        return 0.0
+    t = d0 / threshold
+    return 0.008 * (1.0 - t) + 0.004 * t
+
+
+def build_hires_duplicate(obj, spec, seed):
+    # 지금의 sculpt()까지 끝난 저해상도 블록을 복제해 VOXEL_HI로 다시 리메시하고
+    # 끌 자국/공동/서리 결 세 겹을 법선 방향으로 더한다. 윤곽 모서리 근처는 변위를 절반으로 줄인다.
+    width, height, depth = spec["size"]
+    half = Vector((width / 2, depth / 2, height / 2))
+    hires = obj.copy()
+    hires.data = obj.data.copy()
+    hires.name = f"{obj.name}-hires"
+    bpy.context.collection.objects.link(hires)
+
+    remesh = hires.modifiers.new("remesh_hi", "REMESH")
+    remesh.mode = "VOXEL"
+    remesh.voxel_size = VOXEL_HI
+    apply_modifiers(hires)
+
+    marks = build_chisel_marks(half, seed)
+    cavity_offset = Vector((seed * 7.3 + 11.0, seed * 11.9 + 5.0, seed * 4.1 + 2.0))
+    frost_offset = Vector((seed * 3.1, seed * 1.7, seed * 5.3))
+
+    bm = bmesh.new()
+    bm.from_mesh(hires.data)
+    bm.normal_update()
+
+    moves = []
+    for vert in bm.verts:
+        p = vert.co
+        chisel = -chisel_depth_at(marks, p, vert.normal)
+        cavity = -cavity_depth_at(p, cavity_offset, CAVITY_CELL)
+        frost = noise.fractal(p * 40.0 + frost_offset, 0.9, 2.0, 3) * FROST_AMPLITUDE
+        total = (chisel + cavity + frost) * (1.0 - edge_factor_absolute(p, half) * 0.5)
+        moves.append((vert, vert.normal.copy() * total))
+    for vert, move in moves:
+        vert.co += move
+    bm.normal_update()
+
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0005)
+    bmesh.ops.dissolve_degenerate(bm, dist=0.0005, edges=bm.edges)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.normal_update()
+
+    bm.to_mesh(hires.data)
+    triangle_count = sum(len(face.verts) - 2 for face in bm.faces)
+    bm.free()
+    for polygon in hires.data.polygons:
+        polygon.use_smooth = True
+    hires.data.set_sharp_from_angle(angle=math.radians(32))
+    return hires, triangle_count
+
+
+def unwrap_atlas(blocks):
+    # 내보내는 저해상도 블록 전부를 하나의 아틀라스(0~1)로 겹치지 않게 모은다.
+    # 기존 블록별 unwrap()을 대체한다.
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in blocks:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = blocks[0]
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
-    bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.02)
+    bpy.ops.uv.smart_project(angle_limit=math.radians(66))
+    bpy.ops.uv.pack_islands(margin=0.004)
     bpy.ops.object.mode_set(mode="OBJECT")
 
 
@@ -355,6 +515,175 @@ def bake_ambient_occlusion(blocks):
         activate(obj)
         bpy.ops.object.bake(type="AO", target="VERTEX_COLORS")
     bpy.data.objects.remove(ground, do_unlink=True)
+
+
+def new_atlas_image(name, size):
+    image = bpy.data.images.new(name, size, size, alpha=False, float_buffer=True)
+    image.colorspace_settings.name = "Non-Color"
+    return image
+
+
+def bake_material_for_targets(blocks):
+    # 저해상도 블록 전부가 공유하는 굽기용 재질. 이미지 텍스처 노드 3개를 두고
+    # 굽는 대상(법선/디테일 AO/볼록도)에 따라 활성 노드를 바꾼다. 노드를 셰이더 출력에
+    # 연결할 필요는 없다(굽기는 활성 이미지 노드와 활성 UV만 본다).
+    material = bpy.data.materials.new("bake-target")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    normal_node = nodes.new("ShaderNodeTexImage")
+    ao_node = nodes.new("ShaderNodeTexImage")
+    convexity_node = nodes.new("ShaderNodeTexImage")
+    for obj in blocks:
+        obj.data.materials.clear()
+        obj.data.materials.append(material)
+    return material, normal_node, ao_node, convexity_node
+
+
+def set_active_node(material, node):
+    for other in material.node_tree.nodes:
+        other.select = False
+    node.select = True
+    material.node_tree.nodes.active = node
+
+
+def convexity_material():
+    # Geometry의 Pointiness를 (p-0.5)*4+0.5로 펴서 Emission으로 내보낸다.
+    material = bpy.data.materials.new("bake-convexity")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    nodes.clear()
+    output = nodes.new("ShaderNodeOutputMaterial")
+    emission = nodes.new("ShaderNodeEmission")
+    map_range = nodes.new("ShaderNodeMapRange")
+    map_range.inputs["From Min"].default_value = 0.375
+    map_range.inputs["From Max"].default_value = 0.625
+    map_range.inputs["To Min"].default_value = 0.0
+    map_range.inputs["To Max"].default_value = 1.0
+    map_range.clamp = True
+    geometry = nodes.new("ShaderNodeNewGeometry")
+    links.new(geometry.outputs["Pointiness"], map_range.inputs["Value"])
+    links.new(map_range.outputs["Result"], emission.inputs["Color"])
+    links.new(emission.outputs["Emission"], output.inputs["Surface"])
+    return material
+
+
+def bake_detail_atlas(blocks, layout, size, limit=None):
+    # 조각본 선택, 저해상도 활성으로 블록마다 같은 이미지에 이어서 굽는다(첫 블록 뒤에는
+    # 이미지를 지우지 않는다). 메모리를 아끼려고 블록 하나씩 조각본을 만들고 굽고 지운다.
+    scene = bpy.context.scene
+    scene.render.engine = "CYCLES"
+    scene.cycles.device = "CPU"
+
+    normal_image = new_atlas_image("isu-blocks-normal", size)
+    ao_image = new_atlas_image("isu-blocks-ao-detail", size)
+    convexity_image = new_atlas_image("isu-blocks-convexity", size)
+    material, normal_node, ao_node, convexity_node = bake_material_for_targets(blocks)
+    normal_node.image = normal_image
+    ao_node.image = ao_image
+    convexity_node.image = convexity_image
+    convexity_src_material = convexity_material()
+
+    detail_world = bpy.data.worlds.new("detail-ao")
+    detail_world.light_settings.distance = 0.05
+
+    targets = blocks if limit is None else blocks[:limit]
+    hires_stats = []
+    for index, obj in enumerate(targets):
+        spec = layout[index]
+        seed = index + 1
+        start = time.time()
+        hires_obj, tri_count = build_hires_duplicate(obj, spec, seed)
+        hires_obj.data.materials.clear()
+        hires_obj.data.materials.append(convexity_src_material)
+
+        bpy.ops.object.select_all(action="DESELECT")
+        hires_obj.select_set(True)
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+
+        first = index == 0
+        set_active_node(material, normal_node)
+        scene.cycles.samples = 8
+        bpy.ops.object.bake(
+            type="NORMAL",
+            use_selected_to_active=True,
+            cage_extrusion=0.015,
+            max_ray_distance=0.03,
+            use_clear=first,
+        )
+
+        set_active_node(material, ao_node)
+        scene.world = detail_world
+        scene.cycles.samples = 32
+        bpy.ops.object.bake(
+            type="AO",
+            use_selected_to_active=True,
+            cage_extrusion=0.015,
+            max_ray_distance=0.03,
+            use_clear=first,
+        )
+
+        set_active_node(material, convexity_node)
+        scene.cycles.samples = 8
+        bpy.ops.object.bake(
+            type="EMIT",
+            use_selected_to_active=True,
+            cage_extrusion=0.015,
+            max_ray_distance=0.03,
+            use_clear=first,
+        )
+
+        bpy.data.objects.remove(hires_obj, do_unlink=True)
+        elapsed = time.time() - start
+        hires_stats.append((obj.name, tri_count, elapsed))
+        print(
+            f"ISU_BLOCKS hires block={obj.name} triangles={tri_count} bake_time={elapsed:.1f}s"
+        )
+
+    return normal_image, ao_image, convexity_image, hires_stats
+
+
+def combine_detail_image(ao_image, convexity_image, size):
+    # 디테일 AO와 볼록도 두 흑백 결과를 합쳐 detail 질감(R=AO, G=볼록도, B=0)을 만든다.
+    count = size * size * 4
+    ao = np.empty(count, dtype=np.float32)
+    convexity = np.empty(count, dtype=np.float32)
+    ao_image.pixels.foreach_get(ao)
+    convexity_image.pixels.foreach_get(convexity)
+    ao = ao.reshape(-1, 4)
+    convexity = convexity.reshape(-1, 4)
+    detail_image = new_atlas_image("isu-blocks-detail", size)
+    out = np.zeros_like(ao)
+    out[:, 0] = ao[:, 0]
+    out[:, 1] = convexity[:, 0]
+    out[:, 2] = 0.0
+    out[:, 3] = 1.0
+    detail_image.pixels.foreach_set(out.reshape(-1))
+    detail_image.update()
+    return detail_image
+
+
+def configure_raw_image_settings(scene):
+    # 법선/디테일은 데이터 텍스처라 뷰 변환 없이 원본 값 그대로 저장한다.
+    scene.view_settings.view_transform = "Standard"
+    scene.view_settings.look = "None"
+    scene.view_settings.exposure = 0
+    scene.view_settings.gamma = 1
+    scene.render.image_settings.color_mode = "RGB"
+
+
+def save_webp_pair(image, desktop_path, mobile_path, quality):
+    scene = bpy.context.scene
+    scene.render.image_settings.file_format = "WEBP"
+    scene.render.image_settings.quality = quality
+    os.makedirs(os.path.dirname(os.path.abspath(desktop_path)), exist_ok=True)
+    image.save_render(os.path.abspath(desktop_path), scene=scene)
+    mobile_size = image.size[0] // 2
+    image.scale(mobile_size, mobile_size)
+    os.makedirs(os.path.dirname(os.path.abspath(mobile_path)), exist_ok=True)
+    image.save_render(os.path.abspath(mobile_path), scene=scene)
+    return os.path.getsize(desktop_path), os.path.getsize(mobile_path)
 
 
 def edge_wear(mesh):
@@ -408,14 +737,26 @@ def export(blocks, path):
     )
 
 
-def render_preview(blocks, path):
-    scene = bpy.context.scene
+def letter_bounds(layout, letter):
+    xs, ys = [], []
+    for spec in layout:
+        if spec["letter"] != letter or spec.get("dot"):
+            continue
+        cx, cy, _ = spec["center"]
+        w, h, _ = spec["size"]
+        xs += [cx - w / 2, cx + w / 2]
+        ys += [cy - h / 2, cy + h / 2]
+    return min(xs), max(xs), min(ys), max(ys)
+
+
+def build_preview_material(normal_image, detail_image):
     material = bpy.data.materials.new("preview")
     material.use_nodes = True
     nodes = material.node_tree.nodes
     links = material.node_tree.links
     bsdf = nodes["Principled BSDF"]
     bsdf.inputs["Roughness"].default_value = 0.6
+
     attribute = nodes.new("ShaderNodeVertexColor")
     attribute.layer_name = "isu"
     separate = nodes.new("ShaderNodeSeparateColor")
@@ -428,7 +769,47 @@ def render_preview(blocks, path):
     color_a.default_value = (0.0, 0.33, 0.62, 1.0)
     links.new(attribute.outputs["Color"], separate.inputs["Color"])
     links.new(separate.outputs["Red"], color_b)
-    links.new(next(o for o in shade.outputs if o.identifier == "Result_Color"), bsdf.inputs["Base Color"])
+
+    normal_tex = nodes.new("ShaderNodeTexImage")
+    normal_tex.image = normal_image
+    normal_tex.interpolation = "Linear"
+    normal_map = nodes.new("ShaderNodeNormalMap")
+    links.new(normal_tex.outputs["Color"], normal_map.inputs["Color"])
+    links.new(normal_map.outputs["Normal"], bsdf.inputs["Normal"])
+
+    detail_tex = nodes.new("ShaderNodeTexImage")
+    detail_tex.image = detail_image
+    detail_separate = nodes.new("ShaderNodeSeparateColor")
+    links.new(detail_tex.outputs["Color"], detail_separate.inputs["Color"])
+    darken_range = nodes.new("ShaderNodeMapRange")
+    darken_range.inputs["To Min"].default_value = 0.55
+    darken_range.inputs["To Max"].default_value = 1.0
+    links.new(detail_separate.outputs["Red"], darken_range.inputs["Value"])
+
+    darken_mix = nodes.new("ShaderNodeMix")
+    darken_mix.data_type = "RGBA"
+    darken_mix.blend_type = "MULTIPLY"
+    darken_mix.inputs["Factor"].default_value = 1.0
+    shade_result = next(o for o in shade.outputs if o.identifier == "Result_Color")
+    darken_a = next(i for i in darken_mix.inputs if i.identifier == "A_Color")
+    darken_b = next(i for i in darken_mix.inputs if i.identifier == "B_Color")
+    links.new(shade_result, darken_a)
+    links.new(darken_range.outputs["Result"], darken_b)
+    darken_result = next(o for o in darken_mix.outputs if o.identifier == "Result_Color")
+    links.new(darken_result, bsdf.inputs["Base Color"])
+    return material
+
+
+def render_preview(blocks, layout, preview_path, closeup_path, normal_image, detail_image):
+    scene = bpy.context.scene
+    # 질감 저장 단계에서 원본 값 그대로 쓰려고 뷰 변환을 껐다. 미리보기는 보통 눈에 보이는
+    # 렌더라 원래 뷰 변환(AgX)과 PNG로 되돌린다.
+    scene.view_settings.view_transform = "AgX"
+    scene.view_settings.look = "None"
+    scene.view_settings.exposure = 0
+    scene.view_settings.gamma = 1
+    scene.render.image_settings.file_format = "PNG"
+    material = build_preview_material(normal_image, detail_image)
     for obj in blocks:
         obj.data.materials.clear()
         obj.data.materials.append(material)
@@ -436,8 +817,6 @@ def render_preview(blocks, path):
     camera_data = bpy.data.cameras.new("preview")
     camera = bpy.data.objects.new("preview", camera_data)
     scene.collection.objects.link(camera)
-    camera.location = (-1.6, -8.5, 1.9)
-    camera.rotation_euler = (Vector((0.2, 0.0, 1.6)) - camera.location).to_track_quat("-Z", "Y").to_euler()
     scene.camera = camera
     sun_data = bpy.data.lights.new("sun", "SUN")
     sun_data.energy = 3.0
@@ -448,9 +827,25 @@ def render_preview(blocks, path):
     scene.cycles.samples = 48
     scene.render.resolution_x = 1280
     scene.render.resolution_y = 720
-    scene.render.filepath = os.path.abspath(path)
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    bpy.ops.render.render(write_still=True)
+
+    def shoot(path, location, target):
+        camera.location = location
+        camera.rotation_euler = (
+            (Vector(target) - Vector(location)).to_track_quat("-Z", "Y").to_euler()
+        )
+        scene.render.filepath = os.path.abspath(path)
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        bpy.ops.render.render(write_still=True)
+
+    shoot(preview_path, (-1.6, -8.5, 1.9), (0.2, 0.0, 1.6))
+
+    # S와 I 일부가 화면을 채우는 가까운 구도. 실제 레이아웃에서 두 글자의 이음매를 찾는다.
+    # 이음매 한가운데를 겨누면 빈 틈만 보이므로, S 쪽으로 62% 치우친 지점을 겨눈다.
+    i_min_x, i_max_x, i_min_y, i_max_y = letter_bounds(layout, "i")
+    s_min_x, s_max_x, s_min_y, s_max_y = letter_bounds(layout, "s")
+    target_x = i_max_x + (s_min_x - i_max_x) * 0.62
+    target_z = (max(i_min_y, s_min_y) + min(i_max_y, s_max_y)) / 2
+    shoot(closeup_path, (target_x, -6.0, target_z + 0.05), (target_x, 0.0, target_z))
 
 
 def main():
@@ -474,11 +869,17 @@ def main():
         inward, degenerate = sculpt(obj, spec, seed)
         total_inward += inward
         total_degenerate += degenerate
-        unwrap(obj)
         place(obj, spec)
         prepare_colors(obj)
         blocks.append(obj)
     bake_ambient_occlusion(blocks)
+    unwrap_atlas(blocks)
+
+    normal_image, ao_image, convexity_image, hires_stats = bake_detail_atlas(
+        blocks, layout, ATLAS_SIZE, limit=args.limit
+    )
+    detail_image = combine_detail_image(ao_image, convexity_image, ATLAS_SIZE)
+
     for index, obj in enumerate(blocks):
         finalize_colors(obj, index + 1)
     triangles = sum(sum(len(p.vertices) - 2 for p in obj.data.polygons) for obj in blocks)
@@ -486,11 +887,41 @@ def main():
     print(f"ISU_BLOCKS inward={total_inward} degenerate={total_degenerate}")
     if chip_ratios:
         print(f"ISU_BLOCKS chip_ratio_min={min(chip_ratios):.3f}")
+
+    configure_raw_image_settings(bpy.context.scene)
+    models_dir = os.path.dirname(os.path.abspath(args.out))
+    mobile_dir = os.path.join(models_dir, "mobile")
+    normal_sizes = save_webp_pair(
+        normal_image,
+        os.path.join(models_dir, "isu-blocks-normal.webp"),
+        os.path.join(mobile_dir, "isu-blocks-normal.webp"),
+        90,
+    )
+    detail_sizes = save_webp_pair(
+        detail_image,
+        os.path.join(models_dir, "isu-blocks-detail.webp"),
+        os.path.join(mobile_dir, "isu-blocks-detail.webp"),
+        85,
+    )
+    print(f"ISU_BLOCKS normal_webp desktop={normal_sizes[0]} mobile={normal_sizes[1]}")
+    print(f"ISU_BLOCKS detail_webp desktop={detail_sizes[0]} mobile={detail_sizes[1]}")
+
     export(blocks, args.out)
     print(f"ISU_BLOCKS glb={os.path.getsize(args.out)} bytes")
-    if args.preview:
-        render_preview(blocks, args.preview)
+
+    if hires_stats:
+        tri_values = [t for _, t, _ in hires_stats]
+        bake_times = [e for _, _, e in hires_stats]
+        print(
+            f"ISU_BLOCKS hires_triangles_min={min(tri_values)} max={max(tri_values)} "
+            f"total={sum(tri_values)}"
+        )
+        print(f"ISU_BLOCKS bake_time_total={sum(bake_times):.1f}s")
+
+    if args.preview and args.closeup:
+        render_preview(blocks, layout, args.preview, args.closeup, normal_image, detail_image)
         print(f"ISU_BLOCKS preview={args.preview}")
+        print(f"ISU_BLOCKS closeup={args.closeup}")
 
 
 main()

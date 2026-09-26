@@ -5,7 +5,11 @@
   "input": "tools/blender/isu-layout.json (scripts/export-isu-layout.ts, buildIsuLayout())",
   "external_assets": false,
   "compression": "KHR_draco_mesh_compression",
-  "attributes": "position, normal, uv, color (R=AO, G=edge wear, B=per-block tint)",
+  "attributes": "position, normal, uv (shared atlas, uv.smart_project + uv.pack_islands), color (R=AO, G=edge wear, B=per-block tint)",
   "note": "Block shapes are generated procedurally by the script. No models, textures or code from third-party sites are included.",
-  "decoder": "apps/web/public/draco/* copied from three 0.183.2 examples/jsm/libs/draco/gltf (MIT via three)"
+  "decoder": "apps/web/public/draco/* copied from three 0.183.2 examples/jsm/libs/draco/gltf (MIT via three)",
+  "textures": {
+    "isu-blocks-normal.webp": "Tangent-space, OpenGL (+Y) normal map baked (Cycles, selected_to_active) from a per-block high-resolution sculpt (VOXEL_HI remesh + procedural chisel marks, voronoi cavities and fractal frost noise, all seeded from the block index) onto the shared low-poly UV atlas. Desktop 2048x2048 quality 90, apps/web/public/models/mobile/ copy scaled to 1024. No external assets.",
+    "isu-blocks-detail.webp": "R=detail ambient occlusion baked with a small (0.05) world light distance so only the sculpted chisel marks and cavities show; G=convexity baked from the Geometry node's Pointiness output remapped to 0..1; B=0. Desktop 2048x2048 quality 85, mobile copy scaled to 1024. Generated procedurally by the same script, no external assets."
+  }
 }
