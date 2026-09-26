@@ -188,3 +188,12 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - 다른 작업의 `apps/web/next-env.d.ts`, Grid 단위 테스트 두 파일과 `.claude/launch.json`, 내용 차이가 없는 `login-motion.ts`는 커밋 대상에서 제외한다. 로컬 실행 환경과 `output/` 검증 증거는 그대로 유지한다.
 - 실행 이미지와 SHA-256을 비교해 앱 소스가 검증 당시와 같음을 확인했다. 새 수면 e2e 파일에 검사 종료 무렵 추가된 `hasWebGL2` 및 선택적 skip 두 곳은 작성자 확인 후 제외하고, 실제 36개 검사를 통과한 이미지 안의 테스트 원본으로 저장했다. 앱 구현을 추가 변경하지 않았다.
 - `git diff --cached --check`와 명시한 파일 목록 확인은 통과했다. 다른 작업 파일 및 로컬 전용 실행 자료는 스테이징하지 않았다.
+
+## 2026-09-26 main 병합
+
+사용자가 작업 브랜치의 main 병합을 승인했다. 성공 기준은 검증된 작업 브랜치를 main에 반영하고 원격 main과 로컬 main이 일치하며 기존 미커밋 파일이 보존되는 것이다.
+
+- `git fetch origin` 후 `git rev-list --left-right --count origin/main...origin/feat/isu-login-visual`: `0 31`. main의 새 변경은 없었다.
+- GitHub check-runs는 빈 목록, commit status의 total_count는 0이었다. 등록된 원격 CI가 없으므로 원격 CI 통과로 표시하지 않는다.
+- 기존 작업 폴더를 유지하고 임시 worktree에서 `git merge --ff-only origin/feat/isu-login-visual`: exit 0. main을 `097eda44b9e8510e61a1d4eb006b12d96744e9ef`로 fast-forward했다.
+- `git diff --exit-code origin/feat/isu-login-visual HEAD`: exit 0. 병합 결과가 직전 검증한 브랜치와 같으므로 앱 검사를 다시 실행하지 않았다. 단위 35개, 통합 20개, e2e 36개와 빌드 통과 증거는 앞 절에 있다. 이 병합 기록만 추가한다.
