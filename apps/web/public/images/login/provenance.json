@@ -51,5 +51,6 @@
       "sha256": "9bce18a9c0e26effffdf04c996789f1f395845c1a4668ee41203ed30d0618a66"
     }
   ],
-  "stills": "login-still-desktop.webp and login-still-mobile.webp are captured from this scene by scripts/capture-login-still.ts"
+  "stills": "login-still-desktop.webp and login-still-mobile.webp were rendered in Blender on 2026-09-26 using this project's isu-blocks.glb and the approved 08 water atmosphere. No slogan is baked into either image. Reproduction and WebP conversion: output/water-production/render_fallback.py and convert_fallback.py.",
+  "water_scene": "apps/web/app/login/isu-water-scene.ts uses the authored Blender block model, local Three.js reflection and pointer ripples informed by the same author's vibe-hr conservatory-scene.ts. Slogan glyphs use the local Geist font and are animated at runtime. No external website assets were downloaded."
 }

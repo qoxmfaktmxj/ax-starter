@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
-import type { createIsuScene } from "./isu-scene";
+import type { createIsuWaterScene } from "./isu-water-scene";
 
-type IsuScene = Awaited<ReturnType<typeof createIsuScene>>;
+type IsuScene = Awaited<ReturnType<typeof createIsuWaterScene>>;
 type ReadyState = "loading" | "false" | "static";
 
 export type LoginSceneHandle = {
@@ -59,11 +59,11 @@ export default function LoginScene({ ref }: { ref?: Ref<LoginSceneHandle> }) {
       sceneRef.current = null;
       setState(ready);
     };
-    const draw = (delta: number) => {
+    const draw = (delta: number, wallDelta = delta) => {
       const scene = sceneRef.current;
       if (!scene) return false;
       try {
-        scene.render(time, delta, assetsReady);
+        scene.render(time, delta, assetsReady, wallDelta);
         return true;
       } catch {
         release("false");
@@ -73,10 +73,13 @@ export default function LoginScene({ ref }: { ref?: Ref<LoginSceneHandle> }) {
     const tick = (now: number) => {
       frame = 0;
       if (!sceneRef.current || !assetsReady || lost || document.hidden) return;
-      const delta = previous ? Math.min((now - previous) / 1000, 0.06) : 1 / 60;
+      const wallDelta = previous
+        ? Math.max(0, (now - previous) / 1000)
+        : 1 / 60;
+      const delta = Math.min(wallDelta, 0.06);
       previous = now;
       time += delta;
-      if (draw(delta)) frame = requestAnimationFrame(tick);
+      if (draw(delta, wallDelta)) frame = requestAnimationFrame(tick);
     };
     const sync = () => {
       stop();
@@ -142,8 +145,10 @@ export default function LoginScene({ ref }: { ref?: Ref<LoginSceneHandle> }) {
     reduced.addEventListener("change", onReducedChange);
     canvas.addEventListener("webglcontextlost", lostContext);
     canvas.addEventListener("webglcontextrestored", restoredContext);
-    import("./isu-scene")
-      .then((module) => module.createIsuScene(canvas, initialization.signal))
+    import("./isu-water-scene")
+      .then((module) =>
+        module.createIsuWaterScene(canvas, initialization.signal),
+      )
       .then((result) => {
         if (disposed) {
           result.dispose();

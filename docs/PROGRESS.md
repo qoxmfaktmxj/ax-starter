@@ -137,3 +137,54 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - 같은 테스트 프로젝트에서 `pnpm e2e`: exit 0, Chromium 브라우저 검사 32개. WebGL 장면과 슬로건 대비 검사도 실행돼 통과했다.
 - SDD 스킬 두 폴더의 `quick_validate.py`: 각각 `Skill is valid!`. Claude Code 자연어 자동 선택은 OAuth 인증 만료로 미검증이다.
 - `docker compose -p ax-starter-ship-20260925 --profile test down --volumes --remove-orphans`: exit 0. 전용 컨테이너, 네트워크, DB/파일 volume을 제거했다. 참조 컨테이너가 없는 작업 전용 이미지 두 개도 `docker image rm`으로 제거했다. 기본 `ax-starter` 프로젝트는 유지했다.
+
+## 2026-09-26 ISU 수면 배경 선택 시안
+
+성공 기준은 기존 ISU 블록 모델을 사용하는 수면 배경 PNG 10개와 번호별 비교 화면을 만들고, 실제 이미지와 화면 전환을 확인하는 것이다. 사용자 결정 전 배경 탐색이며 로그인 구현 완료를 뜻하지 않는다.
+
+- GPT-6 Sol 작업자가 기존 GLB를 Blender에 불러와 1200x750 PNG 10개, 비교 시트, 재현 스크립트와 장면 파일을 생성했다. 주 세션이 비교 시트와 원본을 직접 확인하고 흰 조명 반사 및 06번의 벽처럼 보이는 지형을 제거하도록 검토했다.
+- 산출물: `C:/Users/sp20171217yw/.gstack/projects/ax-starter/designs/isu-water-20260926/`. `index.html`은 로그인 폼 표시와 배경 단독 보기를 지원하고 `contact-sheet.jpg`는 전체 비교 이미지다.
+- 작업자 실행: `& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' -b --factory-startup --python 'C:\Users\sp20171217yw\.gstack\projects\ax-starter\designs\isu-water-20260926\render\render_variants.py' -- --all`. 최종 `render/final.log`에서 10개 저장과 Blender 종료를 확인했다. 렌더 합산 147.5초.
+- 주 세션 실행: `python -m http.server 8765 --bind 127.0.0.1 --directory C:\Users\sp20171217yw\.gstack\projects\ax-starter\designs\isu-water-20260926`. 브라우저에서 이미지 10개 로딩과 1200x750 해상도, 시안 전환 및 배경 단독 보기 상태를 확인했다.
+- 기존 미커밋 로그인 코드와 다른 작업 파일은 수정하지 않았다. 이번 변경은 이 기록뿐이다. 실시간 물결, ISU 상호작용 연결, 실제 GPU 성능, 전체 앱 검사는 이번 시안 작업에서 실행하지 않았다.
+
+## 2026-09-26 ISU 수면 분위기 순환 미리보기
+
+성공 기준은 선택한 04, 05, 06, 08, 09, 10 중 하나로 무작위 시작하고, 같은 3D 장면에서 정해진 순서로 자연스럽게 전환하며 수면과 블록의 포인터 반응을 확인하는 것이다. 유지 45초와 전환 15초를 초기값으로 사용한다.
+
+- GPT-6 Sol이 별도 미리보기를 구현했다. 10 -> 06 -> 05 -> 04 -> 09 -> 08 -> 10 순서이며, 마지막 연결은 라벤더색을 경유한다. 기본 순환은 6분이다.
+- 위치: `C:/Users/sp20171217yw/.gstack/projects/ax-starter/designs/isu-water-live-20260926/`. 기존 GLB, 로컬 Three.js와 Draco를 사용한다. `BRIEF.md`, `REVIEW.md`, `report.md`에 범위와 검토 기록을 남겼다.
+- 작업자 `node build.cjs`: 번들 생성 완료. 주 세션 `node C:\Users\sp20171217yw\.gstack\projects\ax-starter\designs\isu-water-live-20260926\timeline.test.mjs`: exit 0, `timeline tests passed`.
+- 주 세션 `python -m http.server 8766 --bind 127.0.0.1 --directory C:\Users\sp20171217yw\.gstack\projects\ax-starter\designs\isu-water-live-20260926`: 로컬 미리보기 제공. 브라우저에서 무작위 시작 04, 08, 10, 분위기 전환, 포인터 파문, 블록 반응, 일시정지와 재개를 확인했다.
+- 1280x720, 1505x1278, 390x844 화면을 확인했다. 모바일 및 세로형 데스크톱의 글자 잘림과 패널 겹침, 전환 버튼 재시작 문제를 수정한 뒤 해당 화면과 버튼 동작을 다시 확인했다.
+- 본 로그인 앱에는 아직 반영하지 않았다. 기존 미커밋 로그인 수정과 다른 작업 파일을 보존했다. 전체 앱 검사, 인증 회귀 검사, 실제 GPU 성능 검사 및 모션 감소 설정의 운영 체제 런타임 검사는 미실행이다.
+
+## 2026-09-26 수면 장면과 상호작용 슬로건 실제 로그인 적용
+
+성공 기준은 [수면 로그인 기준](superpowers/specs/2026-09-26-isu-water-login.md)에 따른 실제 로그인 화면의 분위기 순환, 물결, 블록과 글자 반응, 모바일 배치, 인증 회귀 검사다. GPT-6 Sol 구현과 주 세션의 코드 및 실제 화면 검토로 진행했다.
+
+- `LoginScene.tsx`가 새 수면 모듈을 사용한다. 여섯 분위기 무작위 시작, 45초 유지와 15초 전환, 흑요석에서 화이트로 돌아올 때의 라벤더 연결을 적용했다. 미리보기의 고정 발광판을 제거해 블록 접촉 시 흰 막대가 노출되는 원인을 없앴다.
+- 슬로건은 로컬 Geist 글리프를 사용하는 실제 3D 객체다. 사각 배경 없이 수면에 반사되고, 포인터 주변 글자가 파문을 따라 움직인 뒤 복귀한다. Share의 기본 세기 0.35와 로그인 성공 시 1을 유지한다. 밝은 장면을 위한 글자 윤곽과 정지 DOM 대체 표시도 제공한다.
+- 실제 캡처에서 큰 글자와 모바일 폼 겹침을 발견해 슬로건 크기와 위치, 모바일 상단 장면 영역을 조정했다. 최종 1440x900과 390x844 화면에서 전체 로고, 슬로건과 폼의 분리를 확인했다. 초기 브라우저 검사에서 포인터 파문, 슬로건 접촉 횟수 증가와 콘솔 오류 0건을 확인했다.
+- Blender로 생성한 수면 대체 이미지 두 장을 갱신했다. 데스크톱 1920x1080, 모바일 780x1688이며 슬로건을 이미지에 굽지 않아 DOM 대체 글자와 중복되지 않는다. 출처는 `apps/web/public/images/login/provenance.json`과 [재현 기록](../output/water-production/test-plan.md)에 남겼다.
+- `pnpm check`: 첫 실행은 새 `isu-water-scene.ts`의 포맷 경고로 실패했다. 해당 파일만 정리한 뒤 최종 exit 0, format/lint/typecheck와 architecture 67개 소스 통과. [로그](../output/water-production/check-final.log).
+- `pnpm test`: exit 0, 9개 파일 35개 검사 통과. 순환 경계, 무작위 시작 후보와 반복 글자 산개 후 복귀를 포함한다. [로그](../output/water-production/unit.log).
+- Docker 명령 공통 접두사는 `docker compose -p ax-water-20260926 -f compose.yaml -f output/water-production/compose.test.yaml --profile test`다. `build test-web test`: exit 0, Next 빌드 완료. 빌드 시 기존 fs trace 경고 9건과 빌드 환경의 기본 auth secret 경고가 남았으며 실행 환경에서는 Compose의 local/test secret을 사용한다. [최종 빌드 로그](../output/water-production/build-final.log).
+- 같은 접두사에서 `run --rm test pnpm test:integration`: exit 0, 4개 파일 20개 검사 통과. [로그](../output/water-production/integration.log).
+- 같은 접두사에서 `run --rm test pnpm e2e`: exit 0, 36개 모두 통과, 실패와 건너뜀 0개, 3.7분. SSO, 비밀번호 로그인, 권한, 로딩 중 로그인, 실패 및 모션 감소 대체 화면, 물/블록/슬로건 반응과 복귀를 포함한다. 흰색과 흑요석 장면의 Challenge 및 성공 Share는 실제 글리프와 주변 윤곽 픽셀을 사용한 국소 대비 3:1 이상 검사에 통과했다. [로그](../output/water-production/e2e.log).
+- Windows 예약 포트 범위에 걸린 3106 바인딩은 실패했다. 시스템 설정 변경 없이 검사 서버를 18766으로 옮겼다.
+- 확인용 실제 앱은 별도 `ax-water-demo-20260926` 프로젝트의 가상 데이터로 `http://127.0.0.1:18700/login`에 실행 중이다. 기본 local volume과 기존 `isu-visual`, `jarvis` 자원은 사용하거나 변경하지 않았다. 실행 방법은 [로컬 실행 기록](../output/water-production/README.md)에 있다.
+- 로컬 앱의 OIDC 연결은 외부 18790과 컨테이너 내부 8090의 불일치로 처음 실패했다. 별도 실행 설정에서 둘 다 18790으로 맞춘 뒤 호스트와 Web 컨테이너의 discovery HTTP 200, SSO 시작 HTTP 200을 확인했다. 실제 브라우저에서 SSO 로그인 후 전체 24건 조회와 로그아웃을 확인했다. 비밀번호 로그인과 인증된 `/api/me`도 HTTP 200이었다. 인증 코드는 변경하지 않았다.
+- 검사 프로젝트의 컨테이너, 네트워크, volume 소유 라벨을 확인하고 같은 접두사의 `down --volumes --remove-orphans`를 실행해 정리했다. 테스트 이미지 태그도 제거했다. 초기 이미지 두 개는 삭제 조회 때 이미 존재하지 않았다. 실행 중인 확인용 앱의 이미지와 volume, `output/` 증거는 유지했다. [정리 로그](../output/water-production/cleanup.log).
+- 작업 전후 SHA-256 비교로 기존 미커밋 `isu-scene.ts`, `isu-blocks.ts`, `isu-glow.ts`, `login-motion.ts`, `next-env.d.ts`, Grid 단위 테스트 두 파일이 바뀌지 않았음을 확인했다. 커밋과 병합은 하지 않았다.
+- 실제 GPU의 50fps 기준은 이번에 측정하지 않았으므로 성능 합격으로 표시하지 않는다. 최종 확인용 앱은 가상 계정을 사용하는 로컬 환경이다.
+
+## 2026-09-26 작업 저장과 브랜치 푸시 준비
+
+사용자는 여기까지 작업을 저장하고 푸시하도록 요청했다. 성공 기준은 로그인 관련 변경을 커밋하고 현재 `feat/isu-login-visual` 브랜치의 로컬 HEAD와 원격 HEAD가 일치하는지 확인하는 것이다. `main` 병합과 PR 생성은 이번 요청 범위에 포함하지 않는다.
+
+- `git fetch origin`과 `git ls-remote --heads origin main feat/isu-login-visual`: exit 0. 원격 main은 `a03a6ed6c671afbbcc555eecd24ccc8f08f2ba08`이고 현재 작업 브랜치는 아직 원격에 없었다.
+- 인계된 기존 빛 효과 초안 세 파일은 이력 보존용 커밋으로 구분한다. 실제 로그인 적용과 해당 검사, 문서는 별도 커밋으로 묶는다.
+- 다른 작업의 `apps/web/next-env.d.ts`, Grid 단위 테스트 두 파일과 `.claude/launch.json`, 내용 차이가 없는 `login-motion.ts`는 커밋 대상에서 제외한다. 로컬 실행 환경과 `output/` 검증 증거는 그대로 유지한다.
+- 실행 이미지와 SHA-256을 비교해 앱 소스가 검증 당시와 같음을 확인했다. 새 수면 e2e 파일에 검사 종료 무렵 추가된 `hasWebGL2` 및 선택적 skip 두 곳은 작성자 확인 후 제외하고, 실제 36개 검사를 통과한 이미지 안의 테스트 원본으로 저장했다. 앱 구현을 추가 변경하지 않았다.
+- `git diff --cached --check`와 명시한 파일 목록 확인은 통과했다. 다른 작업 파일 및 로컬 전용 실행 자료는 스테이징하지 않았다.
