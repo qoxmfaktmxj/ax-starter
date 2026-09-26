@@ -40,7 +40,6 @@ const TUNE = {
   snow: new THREE.Color("#e6f2ff"),
   terrainColor: 0x8e9bb2,
   iceGlow: new THREE.Color(0.35, 0.62, 0.95),
-  coreColor: new THREE.Color(0.85, 0.95, 1),
   iceTint: 0.55,
   lime: new THREE.Color("#a0c840"),
   post: {
@@ -64,8 +63,8 @@ const TUNE = {
   // 글자 블록들이 벌어질수록 커진다. 발광면은 대부분 블록 뒤에 가려 있어 틈으로만
   // 보이므로 밝기를 크게 올려도 화면 전체가 흰 덩어리로 보이지 않는다.
   cavity: {
-    lightIdle: 0.4,
-    lightOpen: 2.0,
+    lightIdle: 0.05,
+    lightOpen: 2.8,
     opacityIdle: 0.03,
     opacityOpen: 0.6,
   },
@@ -422,7 +421,7 @@ export async function createIsuScene(
     .forEach((block, rank, order) => {
       block.delay = (rank / (order.length - 1)) * (1 - LANDING_SPAN);
     });
-  const cavityGlow = createCavityGlow(layout, frost, TUNE.coreColor);
+  const cavityGlow = createCavityGlow(layout, frost);
   letters.add(cavityGlow.group);
   groundGlow = createGroundGlow(
     9,

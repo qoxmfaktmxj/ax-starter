@@ -38,66 +38,130 @@ export function seamSides(
   return [left ? 1 : 0, right ? 1 : 0, below ? 1 : 0, above ? 1 : 0];
 }
 
-// 글자마다 블록 뒤쪽 가운데에 글자 외접 상자 크기의 옅은 발광면을 하나씩 둔다. 가운데가
-// 밝고 가장자리가 어두운 그라데이션과 서리 결로 명암과 질감을 준다(랜딩 cavityLight +
-// glowMaterial과 같은 자리, 같은 역할). 실제 THREE.PointLight를 장면에 두면 다른 모든
-// 블록/지형 재질이 그 빛까지 매 프레임 계산해야 해 SwiftShader 기준 e2e가 눈에 띄게
-// 느려졌다(3:1 대비 검사가 150초 제한을 넘겼다). 대신 재질 자체에 셰이더로 명암을
-// 그려 넣어 장면에 새 광원을 더하지 않는다. 가만히 있을 때는 거의 꺼져 있다가, 그
-// 글자 블록들이 벌어질수록 밝아지고 불투명해져 틈 사이로 명암 있는 흰빛이 비친다.
-export function createCavityGlow(
-  specs: BlockSpec[],
-  frost: THREE.Texture,
-  color: THREE.Color,
-) {
+// 글자마다 블록 뒤쪽에 발광면을 둔다(랜딩 cavityLight + glowMaterial과 같은 자리, 같은
+// 역할). 실제 THREE.PointLight를 장면에 두면 다른 모든 블록/지형 재질이 그 빛까지 매
+// 프레임 계산해야 해 SwiftShader 기준 e2e가 눈에 띄게 느려졌다(3:1 대비 검사가 150초
+// 제한을 넘겼다). 대신 재질 자체에 셰이더로 명암을 그려 넣어 장면에 새 광원을 더하지
+// 않는다. 발광면은 글자 외접 사각형 하나가 아니라 블록마다 그 블록 앞면 윤곽(둥근
+// 모서리와 S의 비스듬한 윤곽 포함)을 조금 안쪽으로 줄인 판 하나씩을 합친 기하다. 블록이
+// 벌어져 틈이 생겨도 그 틈 뒤에는 항상 그 자리 블록 자신의 윤곽만 있어, 글자 실루엣
+// 밖으로 빛 판이 드러나지 않는다. 가만히 있을 때는 거의 꺼져 있다가, 그 글자 블록들이
+// 벌어질수록 밝아지고 불투명해져 틈 사이로 명암 있는 흰빛이 비친다.
+const CAVITY_EDGE_INSET = 0.15; // build_isu_blocks.py BEVEL_RADIUS_RATIO와 같은 비율만큼 각 변에서 줄인다.
+const CAVITY_CORNER_INSET = 0.4; // 로고의 큰 반경 둥근 모서리(corner != "none")가 있는 블록은 더 넉넉히 줄인다.
+const CAVITY_SLANT_SCALE = 0.85; // S의 비스듬한 윤곽은 중심 기준으로 고르게 줄인다.
+
+export function createCavityGlow(specs: BlockSpec[], frost: THREE.Texture) {
   const group = new THREE.Group();
   const letters: Letter[] = ["i", "s", "u"];
   const materials = new Map<Letter, THREE.MeshBasicMaterial>();
+  const uniforms = new Map<Letter, { value: number }>();
   for (const letter of letters) {
-    const bounds = specs
-      .filter((spec) => spec.letter === letter && !spec.dot)
-      .map(blockBounds);
+    const blocks = specs.filter((spec) => spec.letter === letter && !spec.dot);
+    const bounds = blocks.map(blockBounds);
     const minX = Math.min(...bounds.map((b) => b.min[0]));
     const maxX = Math.max(...bounds.map((b) => b.max[0]));
     const minY = Math.min(...bounds.map((b) => b.min[1]));
     const maxY = Math.max(...bounds.map((b) => b.max[1]));
-    const width = maxX - minX;
-    const height = maxY - minY;
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
+    const halfWidth = (maxX - minX) / 2;
+    const halfHeight = (maxY - minY) / 2;
 
+    const positions: number[] = [];
+    const glowUvs: number[] = [];
+    const pushCorner = (x: number, y: number) => {
+      positions.push(x, y, -0.5);
+      glowUvs.push((x - cx) / halfWidth, (y - cy) / halfHeight);
+    };
+    // corners는 왼쪽 아래, 오른쪽 아래, 오른쪽 위, 왼쪽 위(반시계 방향)여야 plane과 같은
+    // +z 방향 앞면이 나온다.
+    const pushQuad = (corners: [number, number][]) => {
+      const [bl, br, tr, tl] = corners;
+      pushCorner(...bl);
+      pushCorner(...br);
+      pushCorner(...tr);
+      pushCorner(...bl);
+      pushCorner(...tr);
+      pushCorner(...tl);
+    };
+    for (const spec of blocks) {
+      const [bx, by] = spec.center;
+      if (spec.outline) {
+        pushQuad(
+          spec.outline.map(([ox, oy]): [number, number] => [
+            bx + ox * CAVITY_SLANT_SCALE,
+            by + oy * CAVITY_SLANT_SCALE,
+          ]) as [number, number][],
+        );
+      } else {
+        const [width, height] = spec.size;
+        const inset =
+          Math.min(width, height) *
+          (spec.corner === "none" ? CAVITY_EDGE_INSET : CAVITY_CORNER_INSET);
+        const hw = width / 2 - inset;
+        const hh = height / 2 - inset;
+        pushQuad([
+          [bx - hw, by - hh],
+          [bx + hw, by - hh],
+          [bx + hw, by + hh],
+          [bx - hw, by + hh],
+        ]);
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(positions, 3),
+    );
+    geometry.setAttribute(
+      "glowUv",
+      new THREE.Float32BufferAttribute(glowUvs, 2),
+    );
+    const intensity = { value: 0 };
     const material = new THREE.MeshBasicMaterial({
-      color: color.clone(),
-      map: frost,
       transparent: true,
       opacity: 0,
       depthWrite: false,
       toneMapped: false,
     });
     material.onBeforeCompile = (shader) => {
-      shader.fragmentShader = shader.fragmentShader.replace(
-        "#include <map_fragment>",
-        `#include <map_fragment>
-        vec2 cavityUv = vMapUv - .5;
-        float cavityRadial = 1. - smoothstep(0., .5, length(cavityUv));
-        float cavityGrain = texture2D(map, vMapUv * 3.).r;
-        diffuseColor.rgb *= mix(.4, 1.3, cavityRadial) * mix(.75, 1.1, cavityGrain);`,
-      );
+      shader.uniforms.uCavityGrain = { value: frost };
+      shader.uniforms.uCavityIntensity = intensity;
+      shader.vertexShader = shader.vertexShader
+        .replace(
+          "#include <common>",
+          "#include <common>\nattribute vec2 glowUv; varying vec2 vGlowUv;",
+        )
+        .replace(
+          "#include <begin_vertex>",
+          "#include <begin_vertex>\nvGlowUv = glowUv;",
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          "#include <common>",
+          "#include <common>\nuniform sampler2D uCavityGrain; uniform float uCavityIntensity; varying vec2 vGlowUv;",
+        )
+        .replace(
+          "#include <map_fragment>",
+          `#include <map_fragment>
+          // 질감은 휘도만 밝기 변화에 쓴다. 석고 원본의 갈색 회색이 색에 섞이지 않는다.
+          float cavityLuma = dot(texture2D(uCavityGrain, vGlowUv * 3.).rgb, vec3(.299, .587, .114));
+          float cavityRadial = 1. - smoothstep(0., 1., length(vGlowUv));
+          diffuseColor.rgb = vec3(.85, .94, 1.) * mix(.55, 1.2, cavityLuma) * mix(.35, 1.3, cavityRadial) * uCavityIntensity;`,
+        );
     };
-    const plane = new THREE.Mesh(
-      new THREE.PlaneGeometry(width * 1.05, height * 1.05),
-      material,
-    );
-    plane.position.set(cx, cy, -0.5);
-    group.add(plane);
+    const mesh = new THREE.Mesh(geometry, material);
+    group.add(mesh);
     materials.set(letter, material);
+    uniforms.set(letter, intensity);
   }
   return {
     group,
     setGlow(letter: Letter, intensity: number, opacity: number) {
-      const material = materials.get(letter)!;
-      material.color.copy(color).multiplyScalar(intensity);
-      material.opacity = opacity;
+      uniforms.get(letter)!.value = intensity;
+      materials.get(letter)!.opacity = opacity;
     },
     dispose() {
       for (const material of materials.values()) material.dispose();

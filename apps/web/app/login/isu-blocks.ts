@@ -152,7 +152,7 @@ function addIceSurface(
       // 옆면 빛(랜딩 sideIce): 로컬 법선이 옆(±x, ±y)을 향할수록 밝고, 둥근 모서리에서 부드럽게
       // 이어진다(vIceSide/vIceSideNeighbor는 정점 셰이더에서 구해 보간한 값). 이웃이 있는
       // 쪽은 그대로, 글자 바깥쪽은 0.3으로 줄인다. 가만히 있을 때는 거의 꺼져 있다.
-      totalEmissiveRadiance += vec3(.80, .93, 1.08) * frostGrain * vIceSide * (.06 + uOpen * 2.4) * mix(.3, 1., vIceSideNeighbor);
+      totalEmissiveRadiance += vec3(.80, .93, 1.08) * frostGrain * vIceSide * (.10 + uOpen * 3.2) * mix(.3, 1., vIceSideNeighbor);
       // 앞면 틈 테두리 빛(랜딩 seamGlow): 앞면에서 블록 가장자리까지 거리로, 이웃이 있는 쪽만.
       float faceFront = 1. - vIceSide;
       vec2 edgeRatio = vec2(abs(vIceLocal.x) / uIceHalf.x, abs(vIceLocal.y) / uIceHalf.y);
