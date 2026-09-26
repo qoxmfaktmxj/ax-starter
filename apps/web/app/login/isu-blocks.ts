@@ -31,8 +31,6 @@ export type IceShared = {
   reveal: { value: number };
   glow: { value: THREE.Color };
   snow: { value: THREE.Color };
-  seam: { value: number };
-  seamColor: { value: THREE.Color };
   tint: { value: number };
 };
 
@@ -75,23 +73,36 @@ function addIceSurface(
   half: THREE.Vector3,
   sides: [number, number, number, number],
   detailMap: THREE.Texture,
+  open: { value: number },
 ) {
   shader.uniforms.uIceGlow = shared.glow;
   shader.uniforms.uSnow = shared.snow;
-  shader.uniforms.uSeam = shared.seam;
-  shader.uniforms.uSeamColor = shared.seamColor;
   shader.uniforms.uIceTint = shared.tint;
   shader.uniforms.uIceHalf = { value: half };
   shader.uniforms.uIceSides = { value: new THREE.Vector4(...sides) };
   shader.uniforms.uDetailMap = { value: detailMap };
+  shader.uniforms.uOpen = open;
   shader.vertexShader = shader.vertexShader
     .replace(
       "#include <common>",
-      "#include <common>\nattribute vec4 color; varying vec4 vIceBake; varying vec3 vIceWorld; varying vec3 vIceNormal; varying vec3 vIceLocal;",
+      "#include <common>\nuniform vec4 uIceSides; attribute vec4 color; varying vec4 vIceBake; varying vec3 vIceWorld; varying vec3 vIceNormal; varying vec3 vIceLocal; varying float vIceSide; varying float vIceSideNeighbor;",
     )
     .replace(
       "#include <begin_vertex>",
       "#include <begin_vertex>\nvIceBake = color; vIceLocal = position;",
+    )
+    .replace(
+      "#include <beginnormal_vertex>",
+      // 옆면 빛 세기는 로컬 법선에서만 정해져 정점당 한 번이면 되므로, 화소마다 다시
+      // 계산하지 않게 여기서 구해 보간한다(SwiftShader 기준 소프트웨어 렌더링 성능).
+      `#include <beginnormal_vertex>
+      vec3 iceLocalNormal = normalize(objectNormal);
+      vIceSide = 1. - abs(iceLocalNormal.z);
+      float iceSideAxisSum = max(1e-4, abs(iceLocalNormal.x) + abs(iceLocalNormal.y));
+      vIceSideNeighbor = (
+        max(0., -iceLocalNormal.x) * uIceSides.x + max(0., iceLocalNormal.x) * uIceSides.y +
+        max(0., -iceLocalNormal.y) * uIceSides.z + max(0., iceLocalNormal.y) * uIceSides.w
+      ) / iceSideAxisSum;`,
     )
     .replace(
       "#include <worldpos_vertex>",
@@ -100,7 +111,7 @@ function addIceSurface(
   shader.fragmentShader = shader.fragmentShader
     .replace(
       "#include <common>",
-      "#include <common>\nuniform vec3 uIceGlow; uniform vec3 uSnow; uniform float uSeam; uniform vec3 uSeamColor; uniform float uIceTint; uniform vec3 uIceHalf; uniform vec4 uIceSides; uniform sampler2D uDetailMap; varying vec4 vIceBake; varying vec3 vIceWorld; varying vec3 vIceNormal; varying vec3 vIceLocal;",
+      "#include <common>\nuniform vec3 uIceGlow; uniform vec3 uSnow; uniform float uIceTint; uniform vec3 uIceHalf; uniform sampler2D uDetailMap; uniform float uOpen; varying vec4 vIceBake; varying vec3 vIceWorld; varying vec3 vIceNormal; varying vec3 vIceLocal; varying float vIceSide; varying float vIceSideNeighbor;",
     )
     .replace(
       "#include <map_fragment>",
@@ -138,13 +149,19 @@ function addIceSurface(
       vec3 iceN = normalize((vec4(normal, 0.) * viewMatrix).xyz);
       float iceKey = clamp(dot(iceN, normalize(vec3(-.46, .69, .54))), 0., 1.);
       totalEmissiveRadiance += diffuse * uIceTint * mix(.4, 1., bakedAo) * mix(.5, 1., sculptDetail.r) * mix(.55, 1.2, iceKey);
-      float seamReach = uIceHalf.y * .18;
-      float spill = max(
-        max(uIceSides.x * (1. - smoothstep(0., seamReach, vIceLocal.x + uIceHalf.x)),
-            uIceSides.y * (1. - smoothstep(0., seamReach, uIceHalf.x - vIceLocal.x))),
-        max(uIceSides.z * (1. - smoothstep(0., seamReach, vIceLocal.y + uIceHalf.y)),
-            uIceSides.w * (1. - smoothstep(0., seamReach, uIceHalf.y - vIceLocal.y))));
-      totalEmissiveRadiance += uSeamColor * spill * spill * uSeam;`,
+      // 옆면 빛(랜딩 sideIce): 로컬 법선이 옆(±x, ±y)을 향할수록 밝고, 둥근 모서리에서 부드럽게
+      // 이어진다(vIceSide/vIceSideNeighbor는 정점 셰이더에서 구해 보간한 값). 이웃이 있는
+      // 쪽은 그대로, 글자 바깥쪽은 0.3으로 줄인다. 가만히 있을 때는 거의 꺼져 있다.
+      totalEmissiveRadiance += vec3(.80, .93, 1.08) * frostGrain * vIceSide * (.06 + uOpen * 2.4) * mix(.3, 1., vIceSideNeighbor);
+      // 앞면 틈 테두리 빛(랜딩 seamGlow): 앞면에서 블록 가장자리까지 거리로, 이웃이 있는 쪽만.
+      float faceFront = 1. - vIceSide;
+      vec2 edgeRatio = vec2(abs(vIceLocal.x) / uIceHalf.x, abs(vIceLocal.y) / uIceHalf.y);
+      float edgeDistance = .5 - max(edgeRatio.x, edgeRatio.y) * .5;
+      float seamGlow = 1. - smoothstep(.012, .075, edgeDistance);
+      totalEmissiveRadiance += vec3(.66, .79, .96) * seamGlow * faceFront * vIceSideNeighbor * (.07 + uOpen * .42);
+      // 모서리 서리(랜딩 edgeFrost): 시야에 스치는 모서리를 차갑게 밝힌다.
+      float edgeFrost = pow(1. - max(0., dot(normalize(vNormal), normalize(vViewPosition))), 3.);
+      totalEmissiveRadiance += vec3(.66, .79, .96) * edgeFrost * .12;`,
     );
 }
 
@@ -165,12 +182,14 @@ export function createIceMaterial(
     metalness: 0,
   });
   const half = new THREE.Vector3(size[0] / 2, size[1] / 2, size[2] / 2);
+  // 블록마다 벌어짐 정도가 달라 재질별 uniform으로 둔다(장면이 매 프레임 갱신한다).
+  const open = { value: 0 };
   material.onBeforeCompile = (shader) => {
-    addIceSurface(shader, shared, half, sides, blockMaps.detail);
+    addIceSurface(shader, shared, half, sides, blockMaps.detail, open);
     addReveal(shader, shared.reveal);
   };
   material.customProgramCacheKey = () => "isu-ice";
-  return material;
+  return { material, open };
 }
 
 // 초록 큐브의 반투명 껍질. 안쪽 코어(createDotCore)가 비쳐 보인다.

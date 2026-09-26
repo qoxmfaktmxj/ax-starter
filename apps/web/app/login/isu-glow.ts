@@ -1,17 +1,13 @@
 import * as THREE from "three";
-import { BLOCK_GAP, blockBounds, type BlockSpec } from "./isu-layout";
+import {
+  BLOCK_GAP,
+  blockBounds,
+  type BlockSpec,
+  type Letter,
+} from "./isu-layout";
 
-const FILL = BLOCK_GAP * 0.6; // 이웃 쪽으로 틈을 메우는 길이
-const INSET = 0.03; // 글자 바깥쪽은 블록 안으로 줄인다
-
-// isu-scene의 hash와 같은 식. 심 인스턴스별 밝기 편차에 쓴다.
-const hash = (x: number, y: number) => {
-  const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
-  return n - Math.floor(n);
-};
-
-// 같은 글자 이웃이 왼쪽/오른쪽/아래/위에 있으면 1, 없으면 0. 틈새 발광 상자와
-// 블록 면으로 번지는 빛(isu-blocks.ts) 양쪽이 같은 이웃 판정을 쓰도록 여기 둔다.
+// 같은 글자 이웃이 왼쪽/오른쪽/아래/위에 있으면 1, 없으면 0. 블록 면으로 번지는 옆면/틈
+// 빛(isu-blocks.ts)이 이 이웃 판정을 쓴다.
 export function seamSides(
   spec: BlockSpec,
   specs: BlockSpec[],
@@ -42,73 +38,72 @@ export function seamSides(
   return [left ? 1 : 0, right ? 1 : 0, below ? 1 : 0, above ? 1 : 0];
 }
 
-// 심의 로컬 상자(회전 전, 블록 중심 기준)를 정한다. 이웃이 있는 쪽으로만 틈을 메우고
-// 글자 바깥쪽과 둥근 모서리 쪽은 블록 안으로 줄여 실루엣 밖으로 빛이 새지 않게 한다.
-function coreBox(spec: BlockSpec, specs: BlockSpec[]) {
-  const [width, height] = spec.size;
-  const [left, right, below, above] = seamSides(spec, specs);
-  // 둥근 모서리 블록은 그 모서리 쪽 두 변을 크게 줄여 네모난 빛이 곡선 밖으로 나오지 않게 한다.
-  const round = Math.min(width, height) * 0.35;
-  const cut = (side: "l" | "r" | "t" | "b") =>
-    spec.corner !== "none" && spec.corner.includes(side) ? round : INSET;
-  if (spec.outline) {
-    // 비스듬한 옆면 밖으로 심이 새지 않게, 윤곽의 안쪽 직사각형으로 x 범위를 줄인다.
-    // outline은 [왼쪽 아래, 오른쪽 아래, 오른쪽 위, 왼쪽 위] 순서다.
-    const leftX = Math.max(spec.outline[0][0], spec.outline[3][0]);
-    const rightX = Math.min(spec.outline[1][0], spec.outline[2][0]);
-    return {
-      x0: leftX + INSET,
-      x1: rightX - INSET,
-      y0: -height / 2 + (below ? -FILL : cut("b")),
-      y1: height / 2 - (above ? -FILL : cut("t")),
+// 글자마다 블록 뒤쪽 가운데에 글자 외접 상자 크기의 옅은 발광면을 하나씩 둔다. 가운데가
+// 밝고 가장자리가 어두운 그라데이션과 서리 결로 명암과 질감을 준다(랜딩 cavityLight +
+// glowMaterial과 같은 자리, 같은 역할). 실제 THREE.PointLight를 장면에 두면 다른 모든
+// 블록/지형 재질이 그 빛까지 매 프레임 계산해야 해 SwiftShader 기준 e2e가 눈에 띄게
+// 느려졌다(3:1 대비 검사가 150초 제한을 넘겼다). 대신 재질 자체에 셰이더로 명암을
+// 그려 넣어 장면에 새 광원을 더하지 않는다. 가만히 있을 때는 거의 꺼져 있다가, 그
+// 글자 블록들이 벌어질수록 밝아지고 불투명해져 틈 사이로 명암 있는 흰빛이 비친다.
+export function createCavityGlow(
+  specs: BlockSpec[],
+  frost: THREE.Texture,
+  color: THREE.Color,
+) {
+  const group = new THREE.Group();
+  const letters: Letter[] = ["i", "s", "u"];
+  const materials = new Map<Letter, THREE.MeshBasicMaterial>();
+  for (const letter of letters) {
+    const bounds = specs
+      .filter((spec) => spec.letter === letter && !spec.dot)
+      .map(blockBounds);
+    const minX = Math.min(...bounds.map((b) => b.min[0]));
+    const maxX = Math.max(...bounds.map((b) => b.max[0]));
+    const minY = Math.min(...bounds.map((b) => b.min[1]));
+    const maxY = Math.max(...bounds.map((b) => b.max[1]));
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+
+    const material = new THREE.MeshBasicMaterial({
+      color: color.clone(),
+      map: frost,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    material.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
+        vec2 cavityUv = vMapUv - .5;
+        float cavityRadial = 1. - smoothstep(0., .5, length(cavityUv));
+        float cavityGrain = texture2D(map, vMapUv * 3.).r;
+        diffuseColor.rgb *= mix(.4, 1.3, cavityRadial) * mix(.75, 1.1, cavityGrain);`,
+      );
     };
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(width * 1.05, height * 1.05),
+      material,
+    );
+    plane.position.set(cx, cy, -0.5);
+    group.add(plane);
+    materials.set(letter, material);
   }
   return {
-    x0: -width / 2 + (left ? -FILL : cut("l")),
-    x1: width / 2 - (right ? -FILL : cut("r")),
-    y0: -height / 2 + (below ? -FILL : cut("b")),
-    y1: height / 2 - (above ? -FILL : cut("t")),
-  };
-}
-
-// 블록 뒤쪽 절반을 채우는 빛나는 심. 블록 틈으로 빛이 새고, 블록이 벌어지면 심이 드러나 더 밝게 보인다.
-export function createGlowCores(specs: BlockSpec[], color: THREE.Color) {
-  const cores = specs.filter((spec) => !spec.dot);
-  const geometry = new THREE.BoxGeometry(1, 1, 1);
-  const material = new THREE.MeshBasicMaterial({
-    color: color.clone(),
-    toneMapped: true,
-  });
-  const mesh = new THREE.InstancedMesh(geometry, material, cores.length);
-  const matrix = new THREE.Matrix4();
-  const position = new THREE.Vector3();
-  const rotation = new THREE.Quaternion();
-  const scale = new THREE.Vector3();
-  cores.forEach((spec, index) => {
-    const box = coreBox(spec, specs);
-    position.set(
-      spec.center[0] + (box.x0 + box.x1) / 2,
-      spec.center[1] + (box.y0 + box.y1) / 2,
-      spec.center[2] - 0.01,
-    );
-    scale.set(box.x1 - box.x0, box.y1 - box.y0, spec.size[2] * 0.58);
-    mesh.setMatrixAt(index, matrix.compose(position, rotation, scale));
-    // 틈마다 밝기를 다르게 해 같은 두께의 LED 막대처럼 보이지 않게 한다.
-    mesh.setColorAt(
-      index,
-      new THREE.Color().setScalar(0.4 + hash(index, 15) * 0.6),
-    );
-  });
-  mesh.instanceMatrix.needsUpdate = true;
-  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  return {
-    mesh,
-    setIntensity(value: number) {
-      material.color.copy(color).multiplyScalar(value);
+    group,
+    setGlow(letter: Letter, intensity: number, opacity: number) {
+      const material = materials.get(letter)!;
+      material.color.copy(color).multiplyScalar(intensity);
+      material.opacity = opacity;
     },
     dispose() {
-      geometry.dispose();
-      material.dispose();
+      for (const material of materials.values()) material.dispose();
+      group.traverse((object) => {
+        if (object instanceof THREE.Mesh) object.geometry.dispose();
+      });
     },
   };
 }

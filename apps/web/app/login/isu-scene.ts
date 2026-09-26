@@ -5,9 +5,9 @@ import {
   createIceMaterial,
   loadBlockGeometries,
 } from "./isu-blocks";
-import { createGlowCores, createGroundGlow, seamSides } from "./isu-glow";
+import { createCavityGlow, createGroundGlow, seamSides } from "./isu-glow";
 import { createIsuLandscape } from "./isu-landscape";
-import { buildIsuLayout } from "./isu-layout";
+import { buildIsuLayout, type Letter } from "./isu-layout";
 import { applyHaze, createPostChain } from "./isu-post";
 import {
   courseFactor,
@@ -56,18 +56,25 @@ const TUNE = {
   },
   haze: { color: new THREE.Color("#22324d"), density: 0.6 },
   glow: {
-    core: 4.5,
-    coreOpen: 2.25,
     ground: 0.8,
     groundOpen: 0.4,
     lime: 6,
-    spill: 0.2,
-    spillOpen: 0.1,
+  },
+  // 글자마다 블록 뒤에 두는 안쪽 발광면의 밝기와 불투명도. 가만히 있을 때는 낮고, 그
+  // 글자 블록들이 벌어질수록 커진다. 발광면은 대부분 블록 뒤에 가려 있어 틈으로만
+  // 보이므로 밝기를 크게 올려도 화면 전체가 흰 덩어리로 보이지 않는다.
+  cavity: {
+    lightIdle: 0.4,
+    lightOpen: 2.0,
+    opacityIdle: 0.03,
+    opacityOpen: 0.6,
   },
   pointerOrbit: { theta: 0.06, phi: 0.025 },
   desktop: { zoomPerAspect: 0.42, offsetX: 0.2, offsetY: 0.06 },
   portrait: { zoomPerAspect: 0.86, offsetY: 0.28 },
 };
+
+const LETTERS: readonly Letter[] = ["i", "s", "u"];
 
 const hash = (x: number, y: number) => {
   const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
@@ -227,8 +234,6 @@ export async function createIsuScene(
     reveal,
     glow: { value: TUNE.iceGlow.clone() },
     snow: { value: TUNE.snow.clone() },
-    seam: { value: TUNE.glow.spill },
-    seamColor: { value: TUNE.coreColor.clone() },
     tint: { value: TUNE.iceTint },
   };
   const maps = { frost, bump };
@@ -330,7 +335,7 @@ export async function createIsuScene(
     throw error;
   }
   const letterCenters = new Map<string, THREE.Vector3>();
-  for (const letter of ["i", "s", "u"] as const) {
+  for (const letter of LETTERS) {
     const members = layout.filter((spec) => spec.letter === letter);
     letterCenters.set(
       letter,
@@ -346,8 +351,8 @@ export async function createIsuScene(
     ...layout.find((spec) => spec.dot)!.center,
   );
   const blocks = layout.map((spec, index) => {
-    const material = spec.dot
-      ? createDotShellMaterial(maps, iceShared, TUNE.lime)
+    const ice = spec.dot
+      ? null
       : createIceMaterial(
           maps,
           blockMaps,
@@ -356,6 +361,9 @@ export async function createIsuScene(
           spec.size,
           seamSides(spec, layout),
         );
+    const material = ice
+      ? ice.material
+      : createDotShellMaterial(maps, iceShared, TUNE.lime);
     const mesh = new THREE.Mesh(geometries[index], material);
     const base = new THREE.Vector3(...spec.center);
     // 손으로 쌓은 느낌을 주려고 블록마다 위치 편차(폭 10%, 높이 6%)와 깊이 방향 돌출(30%)을 준다.
@@ -372,6 +380,8 @@ export async function createIsuScene(
     return {
       mesh,
       material,
+      open: ice?.open ?? null,
+      letter: spec.letter,
       base,
       // 글자 가운데에서 조금 바깥으로, 위로, 카메라 쪽으로 벌어진다.
       outward: new THREE.Vector3()
@@ -412,8 +422,8 @@ export async function createIsuScene(
     .forEach((block, rank, order) => {
       block.delay = (rank / (order.length - 1)) * (1 - LANDING_SPAN);
     });
-  const cores = createGlowCores(layout, TUNE.coreColor);
-  letters.add(cores.mesh);
+  const cavityGlow = createCavityGlow(layout, frost, TUNE.coreColor);
+  letters.add(cavityGlow.group);
   groundGlow = createGroundGlow(
     9,
     4,
@@ -538,6 +548,8 @@ export async function createIsuScene(
   const cameraOffset = new THREE.Vector3();
   const interactionPlane = new THREE.Plane();
   const shareColor = new THREE.Color();
+  // 매 프레임 새 객체를 만들지 않도록 미리 만들어 두고 값만 초기화한다.
+  const letterOpen: Record<Letter, number> = { i: 0, s: 0, u: 0 };
   let frames = 0;
 
   const resize = () => {
@@ -641,6 +653,7 @@ export async function createIsuScene(
 
     let hover = false;
     let opened = 0;
+    letterOpen.i = letterOpen.s = letterOpen.u = 0;
     for (const block of blocks) {
       const distance = block.base.distanceTo(dampedCursor);
       const heightGate = block.reach;
@@ -681,6 +694,13 @@ export async function createIsuScene(
       const land = landing(introProgress, block.delay);
       const spread = Math.max(block.amount, block.idle);
       opened = Math.max(opened, spread);
+      if (block.open) {
+        block.open.value = THREE.MathUtils.smoothstep(spread, 0.02, 0.25);
+        letterOpen[block.letter] = Math.max(
+          letterOpen[block.letter],
+          block.open.value,
+        );
+      }
       block.mesh.position
         .copy(block.from)
         .lerp(block.base, land)
@@ -711,16 +731,23 @@ export async function createIsuScene(
     }
 
     dotCore.setIntensity(1.6 + breath * 0.8 + frame.share * 1.2);
-    // 블록이 벌어질수록 심과 바닥 빛, 틈 옆 블록 면으로 번지는 빛이 밝아진다.
+    // 블록이 벌어질수록 바닥 빛과 그 글자 안쪽 빛이 밝아진다.
     const openness = THREE.MathUtils.smoothstep(opened, 0.02, 0.25);
-    cores.setIntensity(TUNE.glow.core + openness * TUNE.glow.coreOpen);
+    for (const letter of LETTERS) {
+      const value = letterOpen[letter];
+      cavityGlow.setGlow(
+        letter,
+        TUNE.cavity.lightIdle + value * TUNE.cavity.lightOpen,
+        TUNE.cavity.opacityIdle +
+          value * (TUNE.cavity.opacityOpen - TUNE.cavity.opacityIdle),
+      );
+    }
     groundGlow.setIntensity(
       TUNE.glow.ground + openness * TUNE.glow.groundOpen,
       (0.35 + breath * 0.25) * (1 + frame.share),
     );
     limeLight.intensity =
       TUNE.glow.lime * (0.7 + breath * 0.3) * (1 + frame.share);
-    iceShared.seam.value = TUNE.glow.spill + openness * TUNE.glow.spillOpen;
     snowMaterial.uniforms.uTime.value = time;
     post.render(time);
     if (shaderFailed)
@@ -773,7 +800,7 @@ export async function createIsuScene(
       });
       for (const block of blocks) block.material.dispose();
       dotCore.dispose();
-      cores.dispose();
+      cavityGlow.dispose();
       groundGlow.dispose();
       terrainMaterial.dispose();
       snowMaterial.dispose();
