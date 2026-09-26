@@ -5,7 +5,6 @@ import { fixturePassword } from "./login";
 test.use({ reducedMotion: "no-preference" });
 
 const canvas = (page: Page) => page.locator(".loginScene .loginSceneCanvas");
-const hud = (page: Page) => page.locator(".loginScene .loginHud");
 const hasWebGL2 = (page: Page) =>
   page.evaluate(() =>
     Boolean(document.createElement("canvas").getContext("webgl2")),
@@ -231,31 +230,4 @@ test("a missing block model falls back to the still image", async ({
     .poll(() => sceneBackground(page))
     .toContain("login-still-desktop.webp");
   await expect(page.getByLabel("아이디")).toBeEditable();
-});
-
-test("reduced motion never draws the HUD", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/login");
-  await expect(canvas(page)).toHaveAttribute("data-ready", "static");
-  expect(await hud(page).getAttribute("data-points")).toBeNull();
-});
-
-test("the HUD labels blocks near the pointer", async ({ page }) => {
-  test.setTimeout(150_000);
-  await page.setViewportSize({ width: 960, height: 540 });
-  await page.goto("/login");
-  test.skip(
-    !(await hasWebGL2(page)),
-    "이 브라우저에서 WebGL2를 쓸 수 없습니다",
-  );
-  await expect(canvas(page)).toHaveAttribute("data-intro", "complete", {
-    timeout: 90_000,
-  });
-  // 데스크톱 배치에서 글자는 화면 왼쪽 약 30%, 세로 약 44%에 있다.
-  await page.mouse.move(960 * 0.3, 540 * 0.44);
-  await expect
-    .poll(async () => Number(await hud(page).getAttribute("data-points")), {
-      timeout: 30_000,
-    })
-    .toBeGreaterThanOrEqual(3);
 });

@@ -1908,7 +1908,7 @@ git commit -m "feat(login): GTAO, grade pass and height haze" -m "Co-Authored-By
 
 ---
 
-### Task 6: HUD 번호와 연결선
+### Task 6: HUD 번호와 연결선 (HUD는 사용자 결정으로 제외(2026-09-26))
 
 **Files:**
 - Create: `apps/web/app/login/isu-hud.ts`

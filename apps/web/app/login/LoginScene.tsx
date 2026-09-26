@@ -15,7 +15,6 @@ export type LoginSceneHandle = {
 // 랜딩 HeroScene.tsx의 수명 주기를 가져왔다. 모션 감소 설정이면 WebGL을 시작하지 않고 정지 이미지를 쓴다.
 export default function LoginScene({ ref }: { ref?: Ref<LoginSceneHandle> }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const hudRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<IsuScene | null>(null);
 
   useImperativeHandle(
@@ -144,9 +143,7 @@ export default function LoginScene({ ref }: { ref?: Ref<LoginSceneHandle> }) {
     canvas.addEventListener("webglcontextlost", lostContext);
     canvas.addEventListener("webglcontextrestored", restoredContext);
     import("./isu-scene")
-      .then((module) =>
-        module.createIsuScene(canvas, initialization.signal, hudRef.current),
-      )
+      .then((module) => module.createIsuScene(canvas, initialization.signal))
       .then((result) => {
         if (disposed) {
           result.dispose();
@@ -200,7 +197,6 @@ export default function LoginScene({ ref }: { ref?: Ref<LoginSceneHandle> }) {
         data-ready="loading"
         data-preview="false"
       />
-      <canvas ref={hudRef} className="loginHud" />
     </div>
   );
 }
