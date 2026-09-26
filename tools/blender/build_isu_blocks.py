@@ -46,6 +46,8 @@ FROST_AMPLITUDE = 0.0015  # 서리 결 진폭
 EDGE_PRESERVE_BAND = 0.02  # 윤곽 모서리에서 이 거리 안은 변위를 절반으로 줄인다
 ATLAS_SIZE = 2048  # 질감 아틀라스 해상도(데스크톱)
 MOBILE_ATLAS_SIZE = ATLAS_SIZE // 2  # 모바일 축소본 해상도
+BAKE_CAGE_EXTRUSION = 0.015
+BAKE_MAX_RAY_DISTANCE = 0.03
 
 
 def parse_args():
@@ -394,7 +396,10 @@ def build_chisel_marks(half, seed):
 
 
 def chisel_depth_at(marks, p, vertex_normal):
-    total = 0.0
+    # 겹치는 홈은 깊이를 더하지 않고 가장 깊은 홈만 반영한다(실제 끌 자국도 겹쳐 판다고
+    # 두 배로 깊어지지 않는다). 더하면 여러 홈이 겹치는 자리에서 국소적으로 너무 깊어져
+    # 얇은 벽(윤곽 블록, 코너 칩 자국)이 자기 자신과 겹치는 접힘을 만든다.
+    deepest = 0.0
     for mark in marks:
         along = mark["p1"] - mark["p0"]
         length_sq = along.length_squared
@@ -410,8 +415,8 @@ def chisel_depth_at(marks, p, vertex_normal):
         taper = min(smoothstep(0.0, 0.2, t), 1.0 - smoothstep(0.8, 1.0, t))
         # 그 면을 바라보는 정점에만 적용한다(다른 면으로 새지 않게).
         facing = max(0.0, vertex_normal.dot(mark["normal"])) ** 2
-        total += cross_section * taper * facing
-    return total
+        deepest = max(deepest, cross_section * taper * facing)
+    return deepest
 
 
 def cavity_depth_at(p, offset, cell):
@@ -422,7 +427,11 @@ def cavity_depth_at(p, offset, cell):
     if d0 >= threshold:
         return 0.0
     t = d0 / threshold
-    return 0.008 * (1.0 - t) + 0.004 * t
+    depth = 0.008 * (1.0 - t) + 0.004 * t
+    # 경계(t=1)에서 깊이가 0.004에서 0으로 뚝 끊기면 그 자리 기울기가 복셀 크기보다
+    # 커져 표면이 접힌다. 마지막 30%(t 0.7~1.0) 구간에서 0으로 부드럽게 뺀다.
+    taper = smoothstep(1.0, 0.7, t)
+    return depth * taper
 
 
 def build_hires_duplicate(obj, spec, seed):
@@ -443,6 +452,13 @@ def build_hires_duplicate(obj, spec, seed):
     marks = build_chisel_marks(half, seed)
     cavity_offset = Vector((seed * 7.3 + 11.0, seed * 11.9 + 5.0, seed * 4.1 + 2.0))
     frost_offset = Vector((seed * 3.1, seed * 1.7, seed * 5.3))
+    # 브리프의 홈/공동 깊이 범위를 그대로 정점 변위로 옮기면 VOXEL_HI(0.008) 한 걸음
+    # 사이의 기울기가 너무 가팔라 27블록 전체에서 표면이 자기 자신과 접혔다(quality_check
+    # inward>0). 윤곽(outline) 블록은 옆면이 비스듬히 깎여 더 얇아 배율을 더 줄인다.
+    # 실측(check_hires_quality 반복): 두 배율과 절대값 한도를 함께 낮춰야 27블록 전체
+    # inward=0 degenerate=0에 도달했다(자세한 값은 task-blender-detail-report.md 참고).
+    detail_scale = 0.12 if spec.get("outline") else 0.32
+    depth_limit = 0.0065
 
     bm = bmesh.new()
     bm.from_mesh(hires.data)
@@ -454,7 +470,9 @@ def build_hires_duplicate(obj, spec, seed):
         chisel = -chisel_depth_at(marks, p, vert.normal)
         cavity = -cavity_depth_at(p, cavity_offset, CAVITY_CELL)
         frost = noise.fractal(p * 40.0 + frost_offset, 0.9, 2.0, 3) * FROST_AMPLITUDE
-        total = (chisel + cavity + frost) * (1.0 - edge_factor_absolute(p, half) * 0.5)
+        total = (chisel + cavity + frost) * detail_scale
+        total *= 1.0 - edge_factor_absolute(p, half) * 0.5
+        total = max(-depth_limit, min(depth_limit, total))
         moves.append((vert, vert.normal.copy() * total))
     for vert, move in moves:
         vert.co += move
@@ -465,13 +483,16 @@ def build_hires_duplicate(obj, spec, seed):
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     bm.normal_update()
 
+    inward, degenerate = quality_check(bm, half)
+    print(f"ISU_BLOCKS hires block={hires.name} inward={inward} degenerate={degenerate}")
+
     bm.to_mesh(hires.data)
     triangle_count = sum(len(face.verts) - 2 for face in bm.faces)
     bm.free()
     for polygon in hires.data.polygons:
         polygon.use_smooth = True
     hires.data.set_sharp_from_angle(angle=math.radians(32))
-    return hires, triangle_count
+    return hires, triangle_count, inward, degenerate
 
 
 def unwrap_atlas(blocks):
@@ -593,7 +614,9 @@ def bake_detail_atlas(blocks, layout, size, limit=None):
         spec = layout[index]
         seed = index + 1
         start = time.time()
-        hires_obj, tri_count = build_hires_duplicate(obj, spec, seed)
+        hires_obj, tri_count, hires_inward, hires_degenerate = build_hires_duplicate(
+            obj, spec, seed
+        )
         hires_obj.data.materials.clear()
         hires_obj.data.materials.append(convexity_src_material)
 
@@ -608,35 +631,44 @@ def bake_detail_atlas(blocks, layout, size, limit=None):
         bpy.ops.object.bake(
             type="NORMAL",
             use_selected_to_active=True,
-            cage_extrusion=0.015,
-            max_ray_distance=0.03,
+            cage_extrusion=BAKE_CAGE_EXTRUSION,
+            max_ray_distance=BAKE_MAX_RAY_DISTANCE,
             use_clear=first,
         )
 
+        # AO 굽기는 use_selected_to_active로 목표 표면을 고르지만, 가려짐 자체는
+        # 장면 전체를 본다. 다른 26개 블록이 그대로 있으면 이웃 블록의 접촉 그늘까지
+        # 이 디테일 AO에 함께 구워져(브리프가 정점 색 R에 맡긴 몫과 겹쳐) 넓은 면이
+        # 검게 죽는다. 이 굽기 동안만 다른 블록을 렌더링에서 숨긴다.
+        others = [block for block in blocks if block is not obj]
+        for other in others:
+            other.hide_render = True
         set_active_node(material, ao_node)
         scene.world = detail_world
         scene.cycles.samples = 32
         bpy.ops.object.bake(
             type="AO",
             use_selected_to_active=True,
-            cage_extrusion=0.015,
-            max_ray_distance=0.03,
+            cage_extrusion=BAKE_CAGE_EXTRUSION,
+            max_ray_distance=BAKE_MAX_RAY_DISTANCE,
             use_clear=first,
         )
+        for other in others:
+            other.hide_render = False
 
         set_active_node(material, convexity_node)
         scene.cycles.samples = 8
         bpy.ops.object.bake(
             type="EMIT",
             use_selected_to_active=True,
-            cage_extrusion=0.015,
-            max_ray_distance=0.03,
+            cage_extrusion=BAKE_CAGE_EXTRUSION,
+            max_ray_distance=BAKE_MAX_RAY_DISTANCE,
             use_clear=first,
         )
 
         bpy.data.objects.remove(hires_obj, do_unlink=True)
         elapsed = time.time() - start
-        hires_stats.append((obj.name, tri_count, elapsed))
+        hires_stats.append((obj.name, tri_count, elapsed, hires_inward, hires_degenerate))
         print(
             f"ISU_BLOCKS hires block={obj.name} triangles={tri_count} bake_time={elapsed:.1f}s"
         )
@@ -655,7 +687,12 @@ def combine_detail_image(ao_image, convexity_image, size):
     convexity = convexity.reshape(-1, 4)
     detail_image = new_atlas_image("isu-blocks-detail", size)
     out = np.zeros_like(ao)
-    out[:, 0] = ao[:, 0]
+    # 작은 세계 조명 거리(0.05)로도 코너 칩/끌 절단면처럼 이미 저해상도 단계에서 깊게
+    # 파낸 자리는 완전히 검게(AO~0) 구워진다. 그 몫은 정점 색 R(접촉 그늘)이 이미 맡고
+    # 있으므로, 이 디테일 AO가 완전한 검은 구멍으로 보이지 않게 아래로 한도를 둔다(기존
+    # 정점 AO가 쓰는 0.3 바닥과 맞춘다). 얕은 새 끌 자국/공동은 이 바닥까지 내려가지 않아
+    # 대비가 줄지 않는다.
+    out[:, 0] = np.maximum(ao[:, 0], 0.3)
     out[:, 1] = convexity[:, 0]
     out[:, 2] = 0.0
     out[:, 3] = 1.0
@@ -910,13 +947,19 @@ def main():
     print(f"ISU_BLOCKS glb={os.path.getsize(args.out)} bytes")
 
     if hires_stats:
-        tri_values = [t for _, t, _ in hires_stats]
-        bake_times = [e for _, _, e in hires_stats]
+        tri_values = [t for _, t, _, _, _ in hires_stats]
+        bake_times = [e for _, _, e, _, _ in hires_stats]
+        hires_total_inward = sum(i for _, _, _, i, _ in hires_stats)
+        hires_total_degenerate = sum(d for _, _, _, _, d in hires_stats)
         print(
             f"ISU_BLOCKS hires_triangles_min={min(tri_values)} max={max(tri_values)} "
             f"total={sum(tri_values)}"
         )
         print(f"ISU_BLOCKS bake_time_total={sum(bake_times):.1f}s")
+        print(
+            f"ISU_BLOCKS hires_inward={hires_total_inward} "
+            f"hires_degenerate={hires_total_degenerate}"
+        )
 
     if args.preview and args.closeup:
         render_preview(blocks, layout, args.preview, args.closeup, normal_image, detail_image)
