@@ -339,3 +339,10 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - 로그인 관련 31개 경로만 명시적으로 `git add`했다. `git diff --cached --check`: exit 0. 스테이징 목록에서 `login-motion.ts`, `next-env.d.ts`, Grid 단위 검사 두 파일과 `.claude/launch.json`을 제외했다. 금지 문자 검사와 기존 다섯 파일 SHA-256 확인도 통과했다.
 - `git commit -m "feat(login): refine ISU water scene and branding"`: exit 0, `26b73c8e13b01716583d1d2e8ea90f6fbc4b0588`, 31개 파일. `git push origin HEAD:main`: exit 0, 원격 main은 `3f29260`에서 `26b73c8`로 fast-forward됐다. `git ls-remote origin refs/heads/main`은 해당 전체 SHA와 일치했고 `origin/main...HEAD`은 `0 0`이었다.
 - 첫 푸시 뒤 남은 작업 트리 변경은 원래 제외한 네 tracked 파일과 `.claude/launch.json`뿐이다. 다른 작업 파일 다섯 개의 SHA-256은 다시 확인해 모두 같았다.
+
+## 2026-09-27 로그인 시각 작업 인계
+
+사용자가 다른 작업 공간에서 현재 시안의 마음에 들지 않는 부분을 수정하려고 인계를 요청했다. 성공 기준은 현재 main 기준, 화면과 코드 구조, 재현 경로, 검증 범위, 남은 제약과 별도 로컬 변경을 한 파일로 정확히 정리해 다른 체크아웃에서도 읽을 수 있게 하는 것이다.
+
+- 인계 작성 전 `HEAD`, 로컬 main과 원격 main은 `3bad3832977c53ab694449fcf959a85cee8fe5d6`으로 일치했다. 확인용 `/login`은 HTTP 200이고 Web 이미지는 `sha256:304fb0e9d06931221e78698c2ed244b41b414a794927f7250989eafdc10810d3`였다. 다른 작업 소유 파일 다섯 개의 해시도 이전 기록과 같았다.
+- `docs/LOGIN_VISUAL_HANDOFF_2026-09-27.md`를 작성했다. 현재 동작과 파일 경계, 검증 결과, 시각 캡처의 로컬 경로, 사용자 불만이 아직 특정되지 않았다는 점을 구분했다. 인계 파일에서 참조한 다섯 PNG가 현재 PC에 존재함을 확인했다. `git diff --check`와 문서의 금지 문자 검사는 통과했다. 앱 소스는 이 인계 작업에서 수정하지 않았다.
