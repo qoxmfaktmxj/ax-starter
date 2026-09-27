@@ -336,3 +336,6 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 
 - `git fetch origin`: exit 0. `git rev-list --left-right --count origin/main...HEAD`: `0 0`. 작업 시작 시 원격 main, 로컬 main, 현재 브랜치 HEAD는 모두 `3f29260236b8954dcf9bb6bf145a26da28b1eebd`였다.
 - 다른 작업 파일 다섯 개의 SHA-256은 `output/dom-slogan-20260927/preserved-files.json`과 모두 일치했다. 로그인 소스, 자산, 검사와 문서만 스테이징한다.
+- 로그인 관련 31개 경로만 명시적으로 `git add`했다. `git diff --cached --check`: exit 0. 스테이징 목록에서 `login-motion.ts`, `next-env.d.ts`, Grid 단위 검사 두 파일과 `.claude/launch.json`을 제외했다. 금지 문자 검사와 기존 다섯 파일 SHA-256 확인도 통과했다.
+- `git commit -m "feat(login): refine ISU water scene and branding"`: exit 0, `26b73c8e13b01716583d1d2e8ea90f6fbc4b0588`, 31개 파일. `git push origin HEAD:main`: exit 0, 원격 main은 `3f29260`에서 `26b73c8`로 fast-forward됐다. `git ls-remote origin refs/heads/main`은 해당 전체 SHA와 일치했고 `origin/main...HEAD`은 `0 0`이었다.
+- 첫 푸시 뒤 남은 작업 트리 변경은 원래 제외한 네 tracked 파일과 `.claude/launch.json`뿐이다. 다른 작업 파일 다섯 개의 SHA-256은 다시 확인해 모두 같았다.
