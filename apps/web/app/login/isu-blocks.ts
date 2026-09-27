@@ -3,10 +3,10 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { BlockSpec, Vec3 } from "./isu-layout";
 
-// 블렌더(tools/blender/build_isu_blocks.py)로 만든 블록 형태를 불러오고 파랑 얼음돌 재질을 입힌다.
+// 블렌더에서 만든 블록 형태와 유리 재질을 불러온다.
 const BLOCK_MODEL_URL = "/models/isu-blocks.glb";
 
-export async function loadBlockGeometries(count: number, signal: AbortSignal) {
+export async function loadBlockMeshes(count: number, signal: AbortSignal) {
   const draco = new DRACOLoader().setDecoderPath("/draco/");
   const loader = new GLTFLoader().setDRACOLoader(draco);
   try {
@@ -18,11 +18,20 @@ export async function loadBlockGeometries(count: number, signal: AbortSignal) {
       const node = gltf.scene.getObjectByName(name);
       if (!(node instanceof THREE.Mesh))
         throw new Error(`블록 모델에 ${name}이 없습니다.`);
-      return node.geometry as THREE.BufferGeometry;
+      if (!(node.material instanceof THREE.MeshPhysicalMaterial))
+        throw new Error(`블록 모델에 ${name}의 유리 재질이 없습니다.`);
+      return node as THREE.Mesh<
+        THREE.BufferGeometry,
+        THREE.MeshPhysicalMaterial
+      >;
     });
   } finally {
     draco.dispose();
   }
+}
+
+export async function loadBlockGeometries(count: number, signal: AbortSignal) {
+  return (await loadBlockMeshes(count, signal)).map((block) => block.geometry);
 }
 
 type Shader = Parameters<THREE.MeshStandardMaterial["onBeforeCompile"]>[0];

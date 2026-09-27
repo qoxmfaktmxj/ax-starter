@@ -43,53 +43,77 @@
   opacity: 1;
 }
 
+.loginCardColumn {
+  grid-column: 2;
+  display: grid;
+  gap: 28px;
+  align-self: center;
+  width: 100%;
+}
+
 .loginBrand {
   position: relative;
-  align-self: end;
-  padding-bottom: 14vh;
 }
 
 .loginSlogan {
   display: grid;
-  gap: 2px;
+  gap: 4px;
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.375rem, 2.2vw, 2rem);
+  font-size: clamp(1.5rem, 2vw, 1.75rem);
   font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
-  -webkit-text-stroke: 1px var(--color-login-slogan-outline);
-  text-shadow:
-    -1px -1px 0 var(--color-login-slogan-outline),
-    1px -1px 0 var(--color-login-slogan-outline),
-    -1px 1px 0 var(--color-login-slogan-outline),
-    1px 1px 0 var(--color-login-slogan-outline),
-    0 2px 5px var(--color-login-slogan-outline);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  text-shadow: 0 1px 2px var(--color-login-slogan-outline);
+  touch-action: pan-y;
+}
+
+.loginSloganAccessible {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.loginSloganLetters {
+  position: relative;
+  display: inline-block;
+  white-space: pre;
+}
+
+.loginSloganLetters::after {
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  background: radial-gradient(
+    ellipse 54px 36px at var(--slogan-sheen-x, 50%) var(--slogan-sheen-y, 50%),
+    var(--slogan-sheen-color),
+    transparent 80%
+  );
+  background-clip: text;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: none;
+  transition: opacity 160ms ease-out;
+  content: attr(data-text);
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .loginSloganLetters:hover::after {
+    opacity: 0.8;
+  }
 }
 
 .loginSloganChallenge {
+  --slogan-sheen-color: var(--color-login-slogan-challenge-sheen);
   color: var(--color-login-slogan-challenge);
 }
 
 .loginSloganShare {
+  --slogan-sheen-color: var(--color-login-slogan-share-sheen);
   color: var(--color-login-slogan-share);
-  opacity: 0.35;
-}
-
-.loginSloganChallenge,
-.loginSloganShare {
-  transition:
-    opacity 600ms ease,
-    transform 600ms ease;
-}
-
-/* Canvas가 실제 글자를 그릴 때에도 같은 문구를 접근성 트리에 유지한다. */
-.loginPage:has(canvas[data-preview="true"]) .loginSlogan {
-  opacity: 0;
-}
-
-.loginPage[data-shared="true"] .loginSloganShare {
-  opacity: 1;
 }
 
 .loginPanel {
@@ -202,6 +226,7 @@
     align-items: stretch;
     gap: var(--space-4);
     padding: var(--space-4);
+    background: var(--color-login-sky-top);
   }
 
   .loginScene {
@@ -213,14 +238,13 @@
     height: calc(var(--login-scene-height) + var(--space-4));
   }
 
-  .loginBrand {
-    display: flex;
-    align-items: flex-end;
-    padding-bottom: var(--space-6);
+  .loginCardColumn {
+    grid-column: 1;
+    grid-row: 2;
   }
 
   .loginSlogan {
-    font-size: 1.25rem;
+    font-size: 1.5rem;
   }
 
   .loginPanel {
@@ -230,5 +254,6 @@
   .loginScene:has(canvas[data-ready="false"]),
   .loginScene:has(canvas[data-ready="static"]) {
     background-image: url("/images/login/login-still-mobile.webp");
+    background-position: center top;
   }
 }

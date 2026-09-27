@@ -63,6 +63,12 @@ test("unavailable WebGL shows the still image and keeps the form", async ({
     .poll(() => sceneBackground(page))
     .toContain("login-still-desktop.webp");
   await expect(page.getByLabel("아이디")).toBeEditable();
+  await expect(
+    page.locator(".loginSloganChallenge .loginSloganLetters"),
+  ).toBeVisible();
+  await expect(
+    page.locator(".loginSloganShare .loginSloganLetters"),
+  ).toBeVisible();
 });
 
 test("reduced motion skips WebGL and shows the still image", async ({
@@ -74,6 +80,12 @@ test("reduced motion skips WebGL and shows the still image", async ({
   await expect
     .poll(() => sceneBackground(page))
     .toContain("login-still-desktop.webp");
+  await expect(
+    page.locator(".loginSloganChallenge .loginSloganLetters"),
+  ).toBeVisible();
+  await expect(
+    page.locator(".loginSloganShare .loginSloganLetters"),
+  ).toBeVisible();
 });
 
 test("the ISU scene finishes its entrance when WebGL is available", async ({
@@ -100,36 +112,45 @@ const opacity = (page: Page, selector: string) =>
     .locator(selector)
     .evaluate((element) => getComputedStyle(element).opacity);
 
-test("a static scene shows Challenge fully and Share faintly", async ({
+test("a static scene keeps both slogans fully visible through sign-in", async ({
   page,
 }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/login");
-  await expect(canvas(page)).toHaveAttribute("data-ready", "static");
-  expect(await opacity(page, ".loginSloganChallenge")).toBe("1");
-  expect(await opacity(page, ".loginSloganShare")).toBe("0.35");
-  await page.addStyleTag({
-    content: ".loginSloganShare { transition: none !important; }",
+  let employeeRequested = false;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
   });
-  await page.getByLabel("아이디").fill("hr-admin");
-  await page.getByLabel("비밀번호").fill(fixturePassword());
-  await page.getByRole("button", { name: "로그인", exact: true }).click();
-  await expect(page.locator(".loginPage")).toHaveAttribute(
-    "data-shared",
-    "true",
-  );
-  await expect
-    .poll(() => opacity(page, ".loginSloganShare"), {
-      timeout: 1_100,
-      intervals: [50],
-    })
-    .toBe("1");
+  await page.route("**/employees**", async (route) => {
+    employeeRequested = true;
+    await gate;
+    await route.continue();
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  try {
+    await page.goto("/login");
+    await expect(canvas(page)).toHaveAttribute("data-ready", "static");
+    expect(await opacity(page, ".loginSloganChallenge")).toBe("1");
+    expect(await opacity(page, ".loginSloganShare")).toBe("1");
+    const shareColor = await page
+      .locator(".loginSloganShare")
+      .evaluate((element) => getComputedStyle(element).color);
+    await page.getByLabel("아이디").fill("hr-admin");
+    await page.getByLabel("비밀번호").fill(fixturePassword());
+    await page.getByRole("button", { name: "로그인", exact: true }).click();
+    await expect.poll(() => employeeRequested).toBe(true);
+    expect(await opacity(page, ".loginSloganShare")).toBe("1");
+    await expect(page.locator(".loginSloganShare")).toHaveCSS(
+      "color",
+      shareColor,
+    );
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  }
   await page.waitForURL("**/employees", { timeout: 15_000 });
 });
 
-test("slogan lines, calm and share follow the scene and the sign-in", async ({
-  page,
-}) => {
+test("slogan lines and calm survive sign-in", async ({ page }) => {
   test.setTimeout(150_000);
   await page.setViewportSize({ width: 960, height: 540 });
   await page.goto("/login");
@@ -153,10 +174,6 @@ test("slogan lines, calm and share follow the scene and the sign-in", async ({
   await page.getByLabel("아이디").fill("hr-admin");
   await page.getByLabel("비밀번호").fill(fixturePassword());
   await page.getByRole("button", { name: "로그인", exact: true }).click();
-  await expect(page.locator(".loginPage")).toHaveAttribute(
-    "data-shared",
-    "true",
-  );
   await page.waitForURL("**/employees", { timeout: 15_000 });
 });
 
@@ -172,4 +189,7 @@ test("a missing block model falls back to the still image", async ({
     .poll(() => sceneBackground(page))
     .toContain("login-still-desktop.webp");
   await expect(page.getByLabel("아이디")).toBeEditable();
+  await expect(
+    page.locator(".loginSloganChallenge .loginSloganLetters"),
+  ).toBeVisible();
 });

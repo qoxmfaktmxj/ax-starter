@@ -21,10 +21,10 @@ describe("ISU block layout measured from the logo", () => {
     ];
   };
 
-  it("uses 27 blocks: I 6, S 10, U 11", () => {
-    expect(blocks).toHaveLength(27);
+  it("uses 26 blocks: I 6, S 9, U 11", () => {
+    expect(blocks).toHaveLength(26);
     expect(byLetter("i")).toHaveLength(6);
-    expect(byLetter("s")).toHaveLength(10);
+    expect(byLetter("s")).toHaveLength(9);
     expect(byLetter("u")).toHaveLength(11);
   });
 
@@ -92,7 +92,7 @@ describe("ISU block layout measured from the logo", () => {
     for (const block of blocks) expect("rotation" in block).toBe(false);
 
     const slanted = blocks.filter((block) => block.outline);
-    expect(slanted).toHaveLength(4);
+    expect(slanted).toHaveLength(3);
     for (const block of slanted) expect(block.letter).toBe("s");
 
     // world-space outline points; BlockSpec stores outline relative to center.

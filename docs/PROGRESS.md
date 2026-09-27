@@ -197,3 +197,142 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - GitHub check-runs는 빈 목록, commit status의 total_count는 0이었다. 등록된 원격 CI가 없으므로 원격 CI 통과로 표시하지 않는다.
 - 기존 작업 폴더를 유지하고 임시 worktree에서 `git merge --ff-only origin/feat/isu-login-visual`: exit 0. main을 `097eda44b9e8510e61a1d4eb006b12d96744e9ef`로 fast-forward했다.
 - `git diff --exit-code origin/feat/isu-login-visual HEAD`: exit 0. 병합 결과가 직전 검증한 브랜치와 같으므로 앱 검사를 다시 실행하지 않았다. 단위 35개, 통합 20개, e2e 36개와 빌드 통과 증거는 앞 절에 있다. 이 병합 기록만 추가한다.
+
+## 2026-09-27 슬로건을 로그인 카드 위의 일반 텍스트로 전환
+
+사용자가 3D 슬로건과 수면 반사를 제외하고, 로그인 카드 바깥 위쪽의 일반 텍스트 배치를 선택했다. 성공 기준은 다음과 같다.
+
+1. 슬로건 두 줄을 로그인 카드와 같은 왼쪽 선에 맞추고 24~32px 간격으로 배치한다. 모바일에서도 카드 위에 표시한다.
+2. 3D 글자와 반사, 사각 배경 판, 두꺼운 글자 외곽선을 제거한다. 기존 수면과 ISU의 움직임은 유지한다.
+3. 포인터나 터치 주변의 HTML 글자만 작은 파문처럼 움직였다 복귀한다. 반복 동작에도 위치가 누적되지 않으며 모션 감소 설정에서는 움직이지 않는다.
+4. 글자가 WebGL 상태와 무관하게 읽히고, Challenge와 Share의 기존 문구 및 로그인 성공 상태를 유지한다. 키보드 로그인과 SSO를 보존한다.
+
+`codex/dom-login-slogan` 브랜치에서 작업한다. 실제 명령과 검사 결과는 완료 후 이 절에 추가한다.
+
+작업 중 사용자가 밝은 배경과 어두운 배경 전환에 맞춘 글자 대비 변경을 요청했다. 초록과 파랑 계열 및 Share 상태는 유지하면서 실제 텍스트 배경에 맞게 명도를 조절하고, 전환 중 가독성도 검사한다. 모바일 정지 대체 이미지의 상단 로고가 잘리는 문제도 함께 확인해 수정 대상으로 기록했다.
+
+- `LoginSlogan.tsx`의 일반 HTML 글자를 로그인 카드 위 28px에 배치했다. 가까운 글자만 최대 약 8px 이동하고 약 0.8초 뒤 복귀한다. 완전한 문장을 접근성 트리에 보존하고, 모션 감소 설정과 페이지 숨김 및 해제 시 애니메이션을 취소한다. 기존 3D 슬로건 모듈과 전용 단위 테스트는 제거했다.
+- 밝은 장면과 어두운 장면에 각각 짙은 색과 밝은 색의 초록/파랑 토큰을 사용한다. 데스크톱은 보간된 하늘과 수평선 및 노출의 휘도 추정값으로 색을 고르고, 약 180ms로 전환한다. 모바일의 고정 어두운 바탕과 정지 대체 화면은 밝은 기본색을 사용한다. WebGL 문맥 상실 및 해제 시 기본색을 복원한다. 색 원값은 palette, 역할은 semantic 토큰에 분리했다.
+- 모바일 정지 이미지에 `background-position: center top`을 적용해 위쪽 ISU 로고가 잘리지 않게 했다. 최종 캡처에서 초록 큐브와 I/S/U 전체를 확인했다.
+- Docker 엔진이 꺼져 있어 `docker desktop start`로 시작했다. 검사 프로젝트는 `ax-dom-slogan-20260927`, 설정은 `compose.yaml`과 `output/dom-slogan-20260927/compose.test.yaml`이다.
+- 최종 `pnpm check`: exit 0, format/lint/typecheck 및 architecture 68개 소스 통과. 최종 `pnpm test`: exit 0, 9개 파일 36개 통과. 색상 전환 경계와 여섯 분위기 보간 구간의 추정 배경 대비를 포함한다. [정적 검사](../output/dom-slogan-20260927/check-adaptive.log), [단위 검사](../output/dom-slogan-20260927/unit-adaptive.log).
+- 검사 프로젝트의 `run --rm test pnpm test:integration`: exit 0, 4개 파일 20개 통과. [로그](../output/dom-slogan-20260927/integration.log).
+- 첫 전체 `run --rm test pnpm e2e`: 41개 중 37개 통과, 4개 실패. 성공 직후 이동으로 인한 관측 실패, 짧은 애니메이션 활성 상태를 늦게 검사한 실패, 밝은 장면의 그림자 대비 부족 두 건을 확인했다. 이동 관측을 gate로 보호하고 애니메이션 상태 변화를 먼저 관측하며 작은 글자 그림자를 보완했다. [첫 실행](../output/dom-slogan-20260927/e2e.log), [보존한 실패 증거](../output/dom-slogan-20260927/first-run-results).
+- 위 수정 뒤 `run --rm test pnpm exec playwright test tests/e2e/login-scene.spec.ts tests/e2e/login-water.spec.ts`: 16개 모두 통과, 2.4분. 이후 사용자 요청인 배경별 글자색과 모바일 정지 이미지 수정을 반영한 최종 동일 명령도 16개 모두 통과, 3.2분. 두 번째 결과를 전체 41개 재실행으로 표시하지 않는다. [첫 재검사](../output/dom-slogan-20260927/e2e-retest.log), [최종 재검사](../output/dom-slogan-20260927/e2e-adaptive.log).
+- 최종 브라우저 검사는 카드 간격과 정렬, 모바일 겹침/가로 넘침, 반복 마우스 및 터치 반응과 복귀, 실행 중 모션 감소, 정지/로딩 중 텍스트, 로그인 성공 Share 변화, 밝고 어두운 장면의 실제 DOM 색 및 국소 픽셀 대비 3:1 이상을 확인했다. 단위 검사의 보간 휘도는 추정값이며 모든 실제 전환 프레임의 픽셀 검사를 뜻하지 않는다.
+- 검사 프로젝트의 최종 `build test-web test`: exit 0. 기존 fs trace 경고 9건과 빌드 시 auth 기본 secret 경고는 남았고, 실행 환경에는 기존 local/test secret이 적용된다. [빌드 로그](../output/dom-slogan-20260927/build-adaptive.log).
+- [밝은 장면](../output/dom-slogan-20260927/login-desktop.png), [어두운 장면](../output/dom-slogan-20260927/login-desktop-dark.png), [모바일 정지 화면](../output/dom-slogan-20260927/login-mobile.png)을 저장하고 직접 열어 확인했다. 슬로건에 입체감이나 수면 반사가 없고 로그인 카드 위에 표시된다.
+- 검증한 이미지를 기존 `ax-water-demo-20260926`의 `ax-starter-water:local`과 tools 태그로 갱신하고 `up -d --no-build --force-recreate web worker`로 적용했다. 기존 DB와 파일 volume을 유지했으며 migrate/seed를 다시 실행하지 않았다. `http://127.0.0.1:18700/login` HTTP 200 확인.
+- 검사 전용 volume과 network의 프로젝트 라벨을 확인한 뒤 `down --volumes --remove-orphans`로 정리했다. 검사 이미지 태그와 참조가 없는 이번 작업 중간 이미지도 정리했다. 실행용 이미지와 데이터, 캡처 및 로그는 보존했다. [정리 로그](../output/dom-slogan-20260927/cleanup.log).
+- 원래 남아 있던 미커밋 파일 다섯 개의 SHA-256이 같고, 최종 실행 전후 테스트 파일 해시가 같음을 확인했다. 커밋과 푸시는 하지 않았다. 실제 GPU 성능은 이번에 측정하지 않았다.
+
+## 2026-09-27 슬로건 글자 발광
+
+성공 기준은 `Challenge the Future`와 `Share the Future`의 포인터 및 터치 반응에 가까운 글자만 잠시 빛나게 하고, 반응 후 위치와 그림자가 돌아오며, 모션 감소 설정에서는 효과를 취소하는 것이다. 일반 HTML 글자와 기존 배치, Share 기본 불투명도 0.35를 유지한다.
+
+- [Unseen Studio](https://unseen.co/)의 실제 화면과 공개 클라이언트 스크립트를 확인했다. 중심 제목은 글자 텍스처를 유체 값으로 변형하고 해당 위치의 색과 밝기를 바꾼다. 현재 로그인은 기존 글자별 이동에 브랜드 녹색 및 파랑 그림자를 더해 비슷한 국소 반응을 구현했다. WebGL 글자 셰이더를 복제한 것은 아니다.
+- 실행 중인 개발 화면에서 글자를 누를 때 해당 글자의 `transform`과 녹색 그림자가 변하고 복귀하는 것을 확인했다. 사용자 문구, 카드 배치, 인증 코드는 바꾸지 않았다.
+- `pnpm check`: exit 0, format/lint/typecheck와 architecture 68개 소스 통과. `pnpm test`: exit 0, 9개 파일 36개 통과.
+- 로컬 `pnpm exec playwright test`는 이 PC에 Playwright Chromium 실행 파일이 없어 브라우저 시작 전에 실패했다. `docker compose -p ax-glow-20260927 -f compose.yaml -f output/dom-slogan-20260927/compose.test.yaml --profile test build test-web test`: exit 0. 기존 fs trace 경고 9건과 빌드 시 auth 기본 secret 경고는 남았다.
+- 첫 Docker 관련 e2e 실행은 test-web을 시작하지 않아 주소 해석에 실패했다. `up -d test-web` 후 마우스 반복 반응과 모션 감소 검사는 통과했다. 터치 검사는 짧은 활성 상태를 뒤늦게 확인해 실패했다. 상태 변화를 검사 중 기록하도록 수정하고 터치 검사 재실행에서 1개 통과했다. 처음 실행을 전체 통과로 표시하지 않는다.
+- 검사 이미지를 기존 `ax-water-demo-20260926`의 로컬 Web와 Worker에 적용했다. DB와 파일 volume은 유지했고 migrate/seed를 다시 실행하지 않았다. Web 컨테이너 이미지 ID와 새 빌드 이미지 ID가 일치하고 `/login` HTTP 200을 확인했다.
+- 검사 전용 프로젝트의 컨테이너, 네트워크 및 두 volume의 소유 라벨을 확인한 뒤 `down --volumes --remove-orphans`: exit 0. 실행용 이미지와 데이터는 보존했다. Impeccable detector가 기존 오류 표시의 `border-left`를 경고했으나 이번 변경과 무관해 수정하지 않았다.
+
+## 2026-09-27 방향성 수면과 노을 장면
+
+성공 기준은 수면의 동심원 고리를 없애고 포인터 이동 방향을 따라 반사가 흔들리게 하며, 05 분위기에 실시간 노을을 넣는 것이다. 기존 여섯 분위기 순환, ISU 반응, 로그인 폼과 대체 이미지는 유지한다. 사용자가 촌스럽다고 지적한 슬로건 글자 이동과 바깥 발광은 제거하고 글자 안쪽의 작은 광택으로 바꾼다.
+
+- [Unseen Studio](https://unseen.co/)의 실제 화면과 공개 클라이언트 스크립트를 다시 확인했다. 반사 좌표에 노이즈와 유체 속도 텍스처를 적용하는 방식이다. 현재 앱은 새 렌더 패스 없이 방향성이 있는 포인터 자취로 반사를 변형한다. 동심원 수식과 밝은 고리를 제거했다. 동일한 유체 시뮬레이션을 복제한 것은 아니다.
+- 다운로드 폴더의 주황색 노을 이미지는 조명 참고로 사용했다. 이미지 안에 이미 그려진 문구와 로그인 폼은 가져오지 않았다. 05 분위기에 주황색 하늘과 수면, 수평선의 태양을 적용하고 45초 유지와 15초 전환은 유지했다. 실제 데스크톱과 390px 모바일에서 ISU와 폼의 배치를 확인했다.
+- `LoginSlogan.tsx`의 글자별 이동과 바깥 색 그림자를 제거했다. 일반 텍스트는 움직이지 않으며 마우스가 있는 글자 안쪽에만 흰 광택을 표시한다. 터치와 모션 감소 상태에서는 광택을 표시하지 않는다. Share 기본 불투명도 0.35와 성공 시 1을 유지한다.
+- `pnpm check`: exit 0, format/lint/typecheck와 architecture 68개 소스 통과. `pnpm test`: exit 0, 9개 파일 36개 통과.
+- `docker compose -p ax-flow-sunset-20260927 -f compose.yaml -f output/flow-sunset-20260927/compose.test.yaml --profile test build test-web test`: exit 0. 기존 fs trace 경고 9건과 빌드 환경 auth 기본 secret 경고는 남았다. 같은 프로젝트에서 `up -d test-web` 후 로그인 관련 두 파일의 Playwright e2e: 16개 통과, 실패와 skip 0, 3.0분. [검사 로그](../output/flow-sunset-20260927/e2e.log).
+- 검증한 runtime 이미지를 `ax-water-demo-20260926`의 Web와 Worker에 적용했다. 기존 DB와 파일 volume을 유지하고 migrate/seed를 다시 실행하지 않았다. Web 컨테이너 이미지 ID는 `sha256:e309f9a961b2f6acc8944682ade3ac103af39bf41309c640077c709a82ad1e97`이며 `/login` HTTP 200을 확인했다.
+- 임시 프로젝트 `ax-flow-sunset-20260927`의 전용 컨테이너, 네트워크와 두 volume은 프로젝트 라벨을 확인한 뒤 `down --volumes --remove-orphans`로 정리했다. 참조 컨테이너가 없는 tools 이미지 태그를 제거했고 실행 중인 확인용 앱이 사용하는 runtime 이미지는 보존했다.
+- Impeccable detector는 기존 오류 표시의 `border-left` 한 곳을 경고했다. 이번 변경과 관계없어 수정하지 않았다. 실제 GPU의 50fps 기준은 아직 측정하지 않았고, 전체 e2e 41개와 실제 전환 프레임 전수 검사도 이번에 실행하지 않았다.
+
+## 2026-09-27 S 연결부 세 블록과 서리 낀 블록 질감
+
+성공 기준은 S 위아래를 잇는 사선 단을 네 블록에서 세 블록으로 바꾸고 실제 GLB와 정지 대체 이미지까지 일치시키는 것이다. 사용자가 요청한 대로 수면의 기본 일렁임과 포인터 자취를 조금 줄이고, 여러 블록 재질을 비교한 뒤 선택한 서리 낀 푸른색 반투명 질감을 적용한다. 로그인과 모션 감소 대체 동작은 유지한다.
+
+- `isu-layout.ts`의 S 사선 경계 다섯 줄을 네 줄로 줄였다. 전체 블록은 27개에서 26개, S는 10개에서 9개가 됐다. `pnpm exec tsx scripts/export-isu-layout.ts`: exit 0. 배치 및 Blender 입력 단위 검사 두 파일 8개 통과.
+- Blender 5.2.1로 `tools/blender/build_isu_blocks.py`를 실행해 GLB와 데스크톱 및 모바일 normal/detail 지도를 다시 만들었다: exit 0, 26개 블록, inward 및 degenerate 0, 고해상도 굽기 합계 230.3초. [전체 미리보기](../output/flow-sunset-20260927/isu-three-preview.png)와 [S 클로즈업](../output/flow-sunset-20260927/isu-three-closeup.png)을 직접 확인했다. 기존 모델과 정지 이미지는 `output/flow-sunset-20260927/before-s-three-blocks/`에 보존했다.
+- 같은 새 GLB로 [현재 광택](../output/flow-sunset-20260927/material-opaque.png), [서리 낀 반투명](../output/flow-sunset-20260927/material-frosted.png), [크리스탈](../output/flow-sunset-20260927/material-crystal.png) 세 가지 Blender 비교 렌더를 만들었다. 사용자는 서리 낀 반투명을 선택하고 별도의 푸른 유리 참고 이미지를 제공했다. 실제 WebGL 화면에서는 과한 투과가 블록을 어둡게 만들어 투과율과 파란색 흡수를 낮추고 약한 투명도 및 모서리 광택을 적용했다. 초록 큐브는 선명한 기존 재질을 유지했다. Blender 비교 렌더는 실제 앱의 픽셀과 동일하다고 주장하지 않는다.
+- 여섯 분위기의 기본 wave 값을 대략 10~20% 낮추고 포인터 자취 세기를 0.42에서 0.3으로 줄였다. 자취의 폭과 반사 좌표 변형도 줄였다. 동심원 고리는 다시 도입하지 않았다.
+- 26블록 실시간 장면의 08 분위기에서 데스크톱 1920x1080 및 모바일 780x910 PNG를 캡처하고 WebP 정지 대체 이미지로 변환했다. 실제 로그인 폼과 슬로건은 캡처 중 숨겨 이미지 안에 들어 있지 않다. [완성 노을 데스크톱](../output/three-block-20260927/final-desktop-sunset.png) 및 [모바일](../output/three-block-20260927/final-mobile-sunset.png) 화면도 직접 확인했다.
+- 최종 `pnpm check`: exit 0, format/lint/typecheck 및 architecture 68개 소스 통과. `pnpm test`: exit 0, 9개 파일 36개 통과. 최종 Docker production 빌드: exit 0. 기존 fs trace 경고 9건과 빌드 환경 auth 기본 secret 경고는 남았다.
+- 첫 전체 로그인 관련 e2e 16개 중 14개 통과, 2개 실패였다. 블록 선택 검사에서 수면 반사 픽셀을 집은 문제와 새 모바일 정지 이미지의 색 판정값을 확인했다. 포인터 반응 검사는 선택 영역 수정 후 통과했고, 모바일 검사는 실제 초록과 파랑 픽셀 범위를 새 재질에 맞춰 조정한 뒤 통과했다. 최종 이미지에서 `docker compose -p ax-three-block-20260927 -f compose.yaml -f output/three-block-20260927/compose.test.yaml --profile test run --rm test pnpm exec playwright test tests/e2e/login-scene.spec.ts tests/e2e/login-water.spec.ts`: 16개 모두 통과, 실패 및 skip 0, 3.2분. [최종 로그](../output/three-block-20260927/e2e-final-all.log).
+- 확인용 `ax-water-demo-20260926`의 Web와 Worker를 최종 이미지 `sha256:b6da9944f35c004b959c460bfbd58f55fce2122e6b81dfe8e037129a69c47141`로 재생성했다. DB와 파일 volume은 유지했고 migrate/seed를 다시 실행하지 않았다. `/login` HTTP 200 및 Web 컨테이너 이미지 ID 일치를 확인했다.
+- 일회성 검사 프로젝트 `ax-three-block-20260927`의 컨테이너, 네트워크와 두 volume의 소유 라벨을 확인하고 `down --volumes --remove-orphans`: exit 0. 참조 컨테이너가 없는 tools 검사 이미지 태그를 제거했다. 실행 중인 데모의 runtime 이미지는 보존했다. 실제 GPU 50fps 기준과 전체 e2e 41개는 이번에 실행하지 않았다.
+
+## 2026-09-27 슬로건 초록과 파랑 고정
+
+성공 기준은 Challenge를 한 가지 초록색, Share를 한 가지 파란색으로 모든 분위기에서 표시하고, Share를 로그인 전부터 완전히 보이게 하며 성공 시 문구의 색과 불투명도 변화를 없애는 것이다. 마우스 호버의 글자 안쪽 광택은 각각 밝은 연두와 하늘색으로 표시한다. 인증 결과와 ISU 블록의 기존 성공 반응은 유지한다.
+
+- `LoginSlogan.tsx`의 두 줄은 그대로 두고 색 역할을 고정된 초록 `#4f8b2f` 및 파랑 `#087eb6`으로 설정했다. 호버 광택은 각 색상과 같은 계열의 밝은 색으로 나누었다. Share의 기본 불투명도 0.35, 성공 시 1로 바뀌는 CSS와 페이지의 `data-shared` 상태를 제거했다. 장면의 색 추정 및 슬로건 색 교체 코드와 더 이상 필요 없는 `slogan-contrast.ts` 및 단위 검사도 제거했다.
+- 실제 개발 화면에서 10 화이트, 08 흑요석, 05 노을의 두 글자색과 Share 불투명도 1을 확인했다. 밝은 테두리도 시도했으나 노을 화면에서 네온처럼 보여 제거했다. 최종 화면은 고정색과 기존 얇은 그림자만 사용한다.
+- `pnpm check`: exit 0, format/lint/typecheck 및 architecture 67개 소스 통과. `pnpm test`: exit 0, 8개 파일 34개 통과. 새 소스의 Docker production 빌드: exit 0. 기존 fs trace 경고 9건과 빌드 환경 auth 기본 secret 경고는 남았다.
+- 첫 로그인 관련 e2e 16개 중 15개 통과, 1개 실패였다. 10 화이트 장면에서 고정 초록 글자 내부의 국소 대비가 1.64:1로 이전 3:1 기준에 못 미쳤다. 한 가지 글자색으로 밝은 장면과 어두운 장면 모두에서 같은 내부 대비를 보장할 수 없고, 사용자는 장면별 색 교체를 원하지 않는다. 이 제한을 통과로 표기하지 않는다. 최종 기준인 고정색, Share 성공 전후 상태와 호버 광택 관련 네 검사는 같은 Docker 프로젝트에서 4개 모두 통과, 2.1분. [첫 검사](../output/fixed-slogan-20260927/e2e.log), [재검사](../output/fixed-slogan-20260927/e2e-retest.log). 전체 16개를 이 마지막 CSS 상태에서 다시 실행한 것으로 표시하지 않는다.
+- 확인용 `ax-water-demo-20260926`의 Web와 Worker를 이미지 `sha256:fd9dacbd2601bf4dd97e3d60f09242afa6ca472edbc568439a2db71721ecbec0`으로 재생성했다. 기존 DB와 파일 volume은 유지하고 migrate/seed는 다시 실행하지 않았다. `/login` HTTP 200 및 이미지 ID 일치를 확인했다.
+- 임시 프로젝트 `ax-fixed-slogan-20260927`의 컨테이너, 네트워크와 두 volume의 소유 라벨을 확인한 뒤 `down --volumes --remove-orphans`: exit 0. 참조 컨테이너가 없는 tools 이미지 태그를 제거하고 실행 중인 runtime 이미지는 보존했다.
+## 2026-09-27 공식 ISU CI 색상 대조
+
+성공 기준은 공식 CI 원본의 RGB 값을 확인하고, 로그인 화면의 ISU 블록과 슬로건 기본색을 해당 파랑과 초록으로 일치시키는 것이다. 버튼과 호버 광택은 같은 원색을 기준으로 만들고 실제 화면, 정지 대체 이미지, 관련 검사를 확인한다. 금색, 은색, 연회색은 공식 팔레트로 기록하되 로그인 장면에 필요 없는 장식은 추가하지 않는다.
+
+- 공식 [ISU CI 페이지](https://www.isu.co.kr/kor/prcenter/ci.jsp)와 사용자가 다운로드한 `Downloads/isu_ci_pdf/isu_ci_pdf.pdf`의 RGB 표기를 대조했다. Blue `#008FD4`, Green `#99CA3C`, Gold `#B4985A`, Silver `#A7A9AC`, Light Gray `#E5E4E0`이다.
+- 블록 재질의 기본색과 흡수색, 고정된 두 슬로건 색을 공식 파랑과 초록으로 바꿨다. 두 슬로건의 호버 광택은 각각의 CI 색에서 밝힌 색이다. 버튼은 흰 글자 대비를 위해 공식 파랑에 검정을 20% 혼합하고, 호버 시 35% 혼합한다. 계산한 흰 글자 대비는 기본 약 5.27:1, 호버 약 7.16:1이다.
+- 패널 배경은 공식 Light Gray를 86% 불투명도로, 테두리는 Silver를 45% 불투명도로 쓴다. Gold는 공식 팔레트에만 기록한다. 수면과 하늘의 여섯 분위기 조명은 브랜드 색상과 별도 연출이며 이번에 바꾸지 않았다.
+- 패널색 수정 후 최종 `pnpm check`: exit 0, format/lint/typecheck 및 architecture 67개 소스 통과. `pnpm test`: exit 0, 8개 파일 34개 통과. 단위 검사는 패널색 수정 전에 실행했고 색 변화와 무관한 기존 검사를 다시 실행하지 않았다.
+- `docker desktop start` 후 `docker compose -p ax-isu-ci-20260927 -f compose.yaml -f output/isu-ci-20260927/compose.test.yaml --profile test build test-web test`: exit 0. 새 CI 색의 실시간 08 장면에서 1920x1080 및 780x910 PNG를 캡처하고 WebP 정지 대체 이미지로 변환했다. 로그인 폼과 HTML 문구는 이미지에 굽지 않았다.
+- 새 정지 이미지로 test-web을 다시 빌드한 뒤 로그인 관련 Playwright 16개 중 15개 통과, 1개 실패. 모바일 검사에서 초록 큐브 윗모서리의 파란 픽셀 하나를 파란 블록 시작점으로 잘못 센 판정 오류였다. 파란 블록 영역으로 판정을 제한한 뒤 해당 모바일 검사 1개 통과. 전체 16개를 판정 수정 뒤 재실행했다고 표기하지 않는다. [첫 로그](../output/isu-ci-20260927/e2e.log), [재검사](../output/isu-ci-20260927/e2e-mobile-retest.log).
+- [화이트 화면](../output/isu-ci-20260927/before-glass-login-desktop.png), [흑요석 화면](../output/isu-ci-20260927/before-glass-login-desktop-dark.png), [모바일](../output/isu-ci-20260927/before-glass-login-mobile.png)을 직접 확인했다. 공식 초록의 흰색 대비는 계산상 약 1.93:1이다. 분위기별 문구색을 고정하라는 이전 사용자 요청에 따라 밝은 화면에서 낮은 대비가 남으며 이를 접근성 통과로 표시하지 않는다.
+- 패널의 공식 연회색 및 은색 적용 후 최종 Docker production 이미지 빌드: exit 0. 기존 fs trace 경고와 빌드용 기본 auth secret 경고는 남았다. 최종 이미지의 모바일 배치 및 화이트와 흑요석 로그인 관련 Playwright 3개: 모두 통과, [로그](../output/isu-ci-20260927/e2e-final-panel.log). 전체 로그인 16개를 마지막 패널색 변경 뒤 재실행했다고 표기하지 않는다.
+- `ax-water-demo-20260926`의 Web와 Worker에 최종 이미지 `sha256:523dbfc4bf4091d39a656e64cbaea01ecae62de88a86bcc1df00d6ed9e79574d`를 적용했다. 두 컨테이너 이미지 ID가 일치하고 `http://127.0.0.1:18700/login` HTTP 200을 확인했다. 기존 DB와 파일 volume을 유지하고 migrate/seed는 다시 실행하지 않았다.
+- 검사 전용 프로젝트 `ax-isu-ci-20260927`의 컨테이너, 네트워크 및 두 volume의 소유 라벨을 확인한 뒤 `down --volumes --remove-orphans`: exit 0. 전용 자원이 남지 않았음을 확인하고 참조 컨테이너가 없는 검사 tools 태그를 제거했다. 실행용 runtime 이미지, 로컬 데이터, 캡처 및 로그는 보존했다.
+- 기존 다른 작업 파일 다섯 개의 SHA-256이 이전 기록과 같고 `git diff --check`가 통과했다. 이번 변경은 미커밋이며 푸시하지 않았다.
+
+## 2026-09-27 Blender MCP 푸른 반투명 재질 시안
+
+성공 기준은 Blender MCP로 기존 26개 블록을 불러와 매끄러운 푸른 투명 재질을 여러 수준으로 렌더하고, 가장 읽기 좋은 시안을 실제 로그인 WebGL 화면과 정지 대체 이미지에 일치시키는 것이다. 공식 ISU 파랑과 초록의 기준색, S 연결부 세 블록, 로그인 폼의 여백과 인증 동작을 유지한다. MCP 재질 값과 브라우저 픽셀의 차이를 실제 캡처로 확인하고 실행한 검사만 기록한다.
+
+- 현재 Codex 세션에는 Blender MCP 도구가 없었다. Blender Lab의 [공식 MCP 서버](https://www.blender.org/lab/mcp-server/) 소스를 `output/blender-mcp-20260927/vendor`에 격리해 가져오고 Python 환경 및 Blender 5.2 확장도 같은 출력 폴더에 설치했다. 원본 commit은 `ff54e4d8f6b09502f2f466189cca0e52b4a91643`이다. 프로젝트 전역 MCP 설정은 바꾸지 않았다.
+- MCP의 `execute_blender_code`로 Blender 5.2.1과 Principled BSDF 입력을 확인하고 기존 GLB의 26개 블록을 불러와 재질과 스튜디오 장면을 만들었다. [아크릴](../output/blender-mcp-20260927/study-acrylic.png), [유리](../output/blender-mcp-20260927/study-glass.png), [프롬프트 수치 그대로](../output/blender-mcp-20260927/study-literal-prompt.png), [균형안](../output/blender-mcp-20260927/study-balanced.png)을 같은 조명에서 비교했다. Transmission 1.0은 내부가 비어 보이고 윤곽이 약해져 균형안의 0.60을 선택했다. Blender 시안의 Roughness는 0.11, IOR 1.46, Coat Weight 0.50, Subsurface Weight 0.06이다.
+- MCP가 실행 중인 Blender의 백그라운드 컨텍스트에서 glTF 내보내기는 `active_object` 부재로 실패했다. MCP가 저장한 `.blend`를 Blender CLI로 열어 GLB를 내보냈다. 결과는 26개 노드와 파랑/초록 재질 2개이며 `KHR_materials_transmission`, `KHR_materials_ior`, `KHR_materials_clearcoat`, Draco 압축을 확인했다. Blender SSS는 glTF에 전달되지 않아 브라우저에서 같은 산란을 주장하지 않는다.
+- 실제 로그인은 GLB의 물리 재질을 읽고 장면 조명에 맞게 푸른 블록의 투과를 0.68로 조절했다. 초록 점은 공식 CI 색이 유지되도록 불투명하게 두었다. 초반의 과한 스튜디오 반사와 거의 보이지 않는 단일 광원을 비교한 뒤 넓게 흐린 스튜디오 반사를 파란 블록에만 적용했다. [브라우저 화이트 비교](../output/blender-mcp-20260927/login-white-blurred-env.png)와 [08 분위기 정지 장면](../output/blender-mcp-20260927/still-desktop.png)을 직접 확인했다.
+- 원본 모델을 출력 폴더에 백업하고 재질 포함 GLB로 교체했다. `tools/blender/build_isu_blocks.py`에도 동일한 재질 내보내기를 반영했다. 제한된 재현 검사 `blender --background --factory-startup --python tools/blender/build_isu_blocks.py -- --layout tools/blender/isu-layout.json --out output/blender-mcp-20260927/generator-check/isu-blocks.glb --limit 1`: exit 0. 26개 노드와 2개 재질 및 glTF 확장을 확인했다. 전체 고해상도 굽기를 다시 실행했다고 표기하지 않는다.
+- [데스크톱](../output/blender-mcp-20260927/still-desktop.png)과 [모바일](../output/blender-mcp-20260927/still-mobile.png)의 08 실시간 장면을 다시 캡처했다. 로그인 폼과 HTML 문구를 숨긴 캡처를 WebP 정지 대체 이미지로 변환했다.
+- 최종 소스의 `pnpm check`: exit 0, format/lint/typecheck 및 architecture 67개 소스 통과. `pnpm test`: exit 0, 8개 파일 34개 통과. 최종 정지 이미지가 포함된 Docker production 빌드: exit 0.
+- 최종 이미지의 로그인 관련 Playwright 첫 실행은 16개 중 15개 통과, 흑요석의 로그인 후 Share 대비 검사 1개 실패였다. 소프트웨어 렌더링에서 픽셀 캡처가 길어져 최초 150초 제한에 걸렸다. 전체 화면 캡처는 별도 시안에 이미 있으므로 테스트에서 제거했고, 다시 실행하자 검사 완료 시점에 배경이 08 흑요석에서 10 화이트로 넘어간 상태를 여전히 어두운 배경으로 판정해 국소 대비 2.22:1이 검출됐다. 문구의 DOM 색은 고정돼 있었다. 실제 측정 후 배경이 08 유지 상태일 때만 3:1을 요구하도록 수정했고, 소프트웨어 렌더링의 제한 시간을 180초로 조정했다. 해당 흑요석 검사 최종 재실행은 1개 통과, [첫 전체 로그](../output/blender-mcp-20260927/e2e-final.log), [재검사 전 오류](../output/blender-mcp-20260927/e2e-obsidian-retest.log), [최종 재검사](../output/blender-mcp-20260927/e2e-obsidian-final.log). 수정 후 전체 16개를 다시 실행했다고 표기하지 않는다.
+- 테스트 수정 뒤 `pnpm check`: exit 0, architecture 67개 소스 통과. 미리 실행한 단위 검사 34개 통과 결과는 유지했다. 소프트웨어 SwiftShader에서 5초간 프레임 증가량을 전후 각각 27과 24로 관측했으며 이는 사용자 GPU의 실측 fps를 뜻하지 않는다. 실제 GPU의 50fps 기준은 이번에 검증하지 않았다.
+- 확인용 `ax-water-demo-20260926`의 Web와 Worker에 최종 이미지 `sha256:3ef696a50ebe63aa22d9f546baf4584fa7fe2dab1770fbbebaae5a6fab6f5ff5`를 적용했다. 두 컨테이너 이미지 ID가 일치하고 `http://127.0.0.1:18700/login` HTTP 200을 확인했다. 기존 DB와 파일 volume을 유지했고 migrate/seed는 다시 실행하지 않았다.
+- 검사 프로젝트 `ax-glass-mcp-20260927`의 전용 컨테이너, 네트워크와 두 volume은 소유 라벨을 확인한 뒤 `down --volumes --remove-orphans`: exit 0. 전용 자원이 남지 않은 것을 확인하고 참조 컨테이너가 없는 tools 이미지 태그를 제거했다. 데모가 참조하는 runtime 이미지와 데이터 및 검증 캡처는 보존했다. 격리한 Blender MCP 백그라운드 프로세스도 명령줄과 포트 9879를 확인한 뒤 종료했다.
+- 기존 다른 작업 소유의 로컬 파일 다섯 개는 SHA-256이 모두 같고 `git diff --check`가 통과했다. 변경은 현재 브랜치의 미커밋 작업이며 푸시하지 않았다.
+
+## 2026-09-27 수면 반사와 블록 빛 반응, 빠른 분위기 순환
+
+성공 기준은 사용자가 확인한 대로 각 분위기를 15초 유지하고 5초에 걸쳐 다음 분위기로 부드럽게 바꾸는 것이다. 수면의 블록 반사에서 반복되는 밝은 사각 면을 줄이고, 포인터가 블록 위에 있을 때만 작은 조명 반응이 나타나며 떠나면 복귀하게 한다. 장면은 청록 일출, 푸른 낮, 노을 일몰, 라벤더 잔광, 비 오는 저녁, 흑요석 밤 순서로 돌린다. 해가 지평선 아래에서 올라와 블록의 빛과 수면의 빛길에 영향을 주고, 노을에서 다시 수면 아래로 내려가며 어두워진다. 터치와 모션 감소 설정에서도 로그인 사용성을 유지하고, 실제 화면과 관련 검사를 확인한다.
+
+1. 분위기 시간 변경 후 단위 검사에서 15초 유지와 5초 전환 경계를 확인한다.
+2. 추가 렌더 단계 없이 기존 수면 셰이더의 반사 왜곡과 밝기만 조정하고 데스크톱 및 모바일 캡처에서 반사를 확인한다.
+3. 기존 블록 선택 판정에 조명 하나를 연결해 호버와 터치 반응, 복귀를 검사한다.
+4. 정지 대체 이미지와 실행 중인 로컬 로그인 화면을 새 장면에 맞추고 실제 실행한 검사를 기록한다.
+5. 참고 사진은 수면 반사의 깊이, 잘게 부서진 태양광, 수평선의 명암 기준으로만 사용한다. 사진 안의 숲, 배와 워터마크는 가져오지 않는다.
+
+- 사용자 확인에 따라 `HOLD_SECONDS=15`, `TRANSITION_SECONDS=5`로 바꿨다. 순서는 06 청록 일출, 10 푸른 낮, 05 노을, 04 라벤더 잔광, 09 비 오는 저녁, 08 흑요석 밤으로 재배열하고 밤에서 일출로 직접 이어지게 했다. `sunArc`는 06에서 수평선 아래부터 올라와 10에서 높아지고 05에서 내려가 04 전에 사라진다. 지평선의 얇은 빛, 블록에 닿는 방향광과 수면 위의 끊어진 빛길이 같은 위치를 따른다.
+- `isu-water.ts`는 반사 샘플을 전경으로 갈수록 넓게 번지게 하고 밝은 사각 면의 피크를 낮췄다. 포인터 자취는 기존 방향성 왜곡을 유지하고 동심원 고리는 다시 넣지 않았다. `isu-water-scene.ts`에 블록 선택 위치를 따라오는 작은 조명 하나를 추가했다. 마우스가 떠나면 감쇠한다. 터치 시작에는 즉시 한 프레임을 그려 짧은 탭이 다음 렌더 프레임 전에 끝나도 빛 반응이 보이게 했다.
+- `Downloads/참고이미지`의 `물비치는질감.png`, `물의질감및 해 표현.PNG`, `지평선끝표현.jpg`를 직접 열었다. 첫 사진의 깊이에 따른 반사 흐림, 두 번째 사진의 잘게 부서진 햇빛, 세 번째 사진의 수평선 명암만 참고했다. 사진 픽셀과 워터마크는 제품 파일에 넣지 않았다.
+- [일출](../output/water-light-20260927/sunrise.png), [푸른 낮](../output/water-light-20260927/day.png), [노을](../output/water-light-20260927/sunset.png), [모바일 노을](../output/water-light-20260927/mobile-sunset.png), [블록 호버](../output/water-light-20260927/hover-glint.png)를 같은 WebGL 장면에서 캡처해 직접 확인했다. 소프트웨어 렌더링이 느려 최초 캡처에서는 06 유지 시간을 지나 10이 찍혀 가상 RAF 시간으로 사진 시점을 고정했다. 두 번째 시각 확인에서 가까운 반사를 더 흐리게 하고 낮 팔레트를 청록빛으로 수정했다. 일부 캡처는 지속 렌더링 중 스크린샷 대기 시간에 걸려 작은 시간 간격으로 계속 렌더하도록 고친 뒤 성공했다.
+- 08 장면의 [데스크톱 정지 이미지](../output/water-light-20260927/still-desktop.png)와 [모바일](../output/water-light-20260927/still-mobile.png)을 다시 캡처했다. 모바일 첫 페이지 캡처는 화면 아래의 빈 공간까지 포함해 부적절했으므로 캔버스 영역만 잘라 780x908 PNG로 다시 저장했다. 폼과 HTML 문구를 숨긴 채 두 PNG를 WebP 대체 이미지로 변환했다. 최종 WebP는 데스크톱 1920x1080 54264바이트, 모바일 780x908 21956바이트다.
+- 최종 `pnpm check`: exit 0, format/lint/typecheck 및 architecture 67개 소스 통과. `pnpm test`: exit 0, 8개 파일 35개 통과. 제한된 분위기 경계 단위 검사에서 새 순서, 15초와 5초, 일출 및 일몰 높이를 확인했다. Docker production 이미지 빌드 exit 0. Impeccable detector의 변경 UI 검사 결과는 빈 목록이었다.
+- 첫 로그인 관련 포인터, 터치 및 모바일 e2e 세 개 중 두 개 통과, 빠른 터치 하나 실패. 느린 브라우저에서 탭 명령이 관측 3초보다 오래 걸려 빛 반응이 기록되지 않았다. 터치 시작 즉시 한 프레임을 그리게 하고 관측 시간을 늘린 뒤 해당 검사 1개 통과, [첫 로그](../output/water-light-20260927/e2e-interaction.log), [재검사](../output/water-light-20260927/e2e-touch-retest.log).
+- 낮과 밤의 로그인 전후 문구색 검사 첫 실행은 낮 장면에서 180초 제한에 걸렸다. 소프트웨어 렌더러의 텍스트 픽셀 캡처가 로그인 검사 전후에 중복으로 오래 걸렸다. 두 장면의 로그인 검사는 DOM 색과 불투명도 유지에 집중하고, 두 문구의 픽셀 대비는 정지 대체 화면 검사에 남겼다. 최종 세 검사 모두 통과, [첫 실행](../output/water-light-20260927/e2e-mood-signin.log), [최종](../output/water-light-20260927/e2e-mood-signin-retest.log). 마지막 상태에서 로그인 e2e 전체를 다시 실행했다고 표기하지 않는다.
+- 최종 이미지 `sha256:304fb0e9d06931221e78698c2ed244b41b414a794927f7250989eafdc10810d3`를 `ax-water-demo-20260926`의 Web와 Worker에 적용했다. `/login` HTTP 200과 두 컨테이너의 이미지 ID 일치를 확인했다. 서버의 모바일 정지 WebP SHA-256도 작업 파일과 일치했다. 기존 DB와 파일 volume을 유지하고 migrate/seed는 다시 실행하지 않았다.
+- 전용 프로젝트 `ax-water-light-20260927`의 컨테이너, 네트워크, 두 volume은 프로젝트 라벨 확인 후 `down --volumes --remove-orphans`로 정리했다. 참조 컨테이너가 없는 tools 이미지 태그를 제거하고 데모의 runtime 이미지는 보존했다. 실제 사용자 GPU의 fps는 측정하지 않았다.
+- 작업 전부터 있던 다른 작업 소유 파일 다섯 개의 SHA-256은 모두 같았다. `git diff --check`와 문서, 코드의 금지 문자 검사도 통과했다. 이 브랜치의 로그인 작업은 아직 커밋하거나 푸시하지 않았다.
+
+## 2026-09-27 현재 로그인 작업 main 반영
+
+사용자가 현재 로그인 시안을 main에 푸시하도록 요청했다. 성공 기준은 로그인 관련 파일만 커밋하고 원격 main을 fast-forward로 갱신한 뒤 원격 SHA가 최종 커밋과 일치하는 것이다. 기존 다른 작업 파일 다섯 개와 로컬 실행 데이터는 보존한다.
+
+- `git fetch origin`: exit 0. `git rev-list --left-right --count origin/main...HEAD`: `0 0`. 작업 시작 시 원격 main, 로컬 main, 현재 브랜치 HEAD는 모두 `3f29260236b8954dcf9bb6bf145a26da28b1eebd`였다.
+- 다른 작업 파일 다섯 개의 SHA-256은 `output/dom-slogan-20260927/preserved-files.json`과 모두 일치했다. 로그인 소스, 자산, 검사와 문서만 스테이징한다.

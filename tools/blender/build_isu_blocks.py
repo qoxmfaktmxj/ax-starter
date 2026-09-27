@@ -528,6 +528,34 @@ def finalize_colors(obj, seed):
         value.color = (value.color[0], wear[index], tint, 1.0)
 
 
+def assign_glass_materials(blocks, layout):
+    def make_material(name, color, transmission):
+        material = bpy.data.materials.new(name)
+        material.use_nodes = True
+        nodes = material.node_tree.nodes
+        bsdf = nodes.get("Principled BSDF") or nodes.new("ShaderNodeBsdfPrincipled")
+        output = next((node for node in nodes if node.type == "OUTPUT_MATERIAL"), None)
+        if output is None:
+            output = nodes.new("ShaderNodeOutputMaterial")
+        material.node_tree.links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
+        bsdf.inputs["Base Color"].default_value = (*color, 1)
+        bsdf.inputs["Metallic"].default_value = 0
+        bsdf.inputs["Roughness"].default_value = 0.11
+        bsdf.inputs["IOR"].default_value = 1.46
+        bsdf.inputs["Transmission Weight"].default_value = transmission
+        bsdf.inputs["Subsurface Weight"].default_value = 0.06
+        bsdf.inputs["Subsurface Scale"].default_value = 0.10
+        bsdf.inputs["Coat Weight"].default_value = 0.50
+        bsdf.inputs["Coat Roughness"].default_value = 0.08
+        return material
+
+    blue = make_material("ISU Blue tinted glass", (0.0, 0.275, 0.658), 0.60)
+    green = make_material("ISU Green tinted glass", (0.319, 0.591, 0.045), 0.45)
+    for obj, spec in zip(blocks, layout):
+        obj.data.materials.clear()
+        obj.data.materials.append(green if spec["dot"] else blue)
+
+
 def export(blocks, path):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     bpy.ops.object.select_all(action="DESELECT")
@@ -541,9 +569,9 @@ def export(blocks, path):
         export_apply=False,
         export_normals=True,
         export_texcoords=True,
-        export_materials="NONE",
+        export_materials="EXPORT",
         export_vertex_color="ACTIVE",
-        export_active_vertex_color_when_no_material=True,
+        export_active_vertex_color_when_no_material=False,
         export_all_vertex_colors=False,
         export_draco_mesh_compression_enable=True,
         export_draco_mesh_compression_level=6,
@@ -717,6 +745,7 @@ def main():
     print(f"ISU_BLOCKS normal_webp desktop={normal_sizes[0]} mobile={normal_sizes[1]}")
     print(f"ISU_BLOCKS detail_webp desktop={detail_sizes[0]} mobile={detail_sizes[1]}")
 
+    assign_glass_materials(blocks, layout)
     export(blocks, args.out)
     print(f"ISU_BLOCKS glb={os.path.getsize(args.out)} bytes")
 

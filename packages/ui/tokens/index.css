@@ -6,12 +6,14 @@
   --brand-cobalt-hover: #2f5cd8;
   --brand-cobalt-active: #244dbd;
 
-  /* ISU brand, sampled from the supplied logo images. Replace with the official guide values. */
-  --brand-isu-blue: #0090d0;
-  --brand-isu-blue-strong: #0077b6;
-  --brand-isu-blue-deep: #005f92;
-  --brand-isu-sky: #33a9e6;
-  --brand-isu-lime: #a0c840;
+  /* Official ISU CI RGB palette. */
+  --brand-isu-blue: #008fd4;
+  --brand-isu-green: #99ca3c;
+  --brand-isu-gold: #b4985a;
+  --brand-isu-silver: #a7a9ac;
+  --brand-isu-light-gray: #e5e4e0;
+
+  /* Login scene atmosphere. */
   --brand-isu-night: #131c2b;
   --brand-isu-dusk: #4a5d7a;
 
@@ -26,8 +28,6 @@
   --neutral-secondary: #475569;
   --neutral-ink: #111318;
   --neutral-login-ink: #0e1b31;
-  --neutral-frost: rgb(244 248 252 / 86%);
-  --neutral-frost-edge: rgb(255 255 255 / 70%);
   --neutral-scrim: rgb(6 12 26 / 62%);
 
   /* Status palette */

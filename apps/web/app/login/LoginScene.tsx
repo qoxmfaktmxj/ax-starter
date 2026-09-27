@@ -101,6 +101,8 @@ export default function LoginScene({ ref }: { ref?: Ref<LoginSceneHandle> }) {
         ((event.clientX - rect.left) / rect.width) * 2 - 1,
         1 - ((event.clientY - rect.top) / rect.height) * 2,
       );
+      if (event.type === "pointerdown" && event.pointerType !== "mouse")
+        draw(0.06, 0);
     };
     const leave = (event: PointerEvent) => {
       if (

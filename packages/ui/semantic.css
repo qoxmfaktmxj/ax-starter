@@ -33,14 +33,28 @@
   --color-scrollbar-thumb-active: var(--color-action-hover);
   --color-scrollbar-track: var(--color-border);
 
-  --color-login-action: var(--brand-isu-blue-strong);
-  --color-login-action-hover: var(--brand-isu-blue-deep);
-  --color-login-slogan-challenge: var(--brand-isu-lime);
-  --color-login-slogan-share: var(--brand-isu-sky);
+  --color-login-action: color-mix(in srgb, var(--brand-isu-blue) 80%, black);
+  --color-login-action-hover: color-mix(
+    in srgb,
+    var(--brand-isu-blue) 65%,
+    black
+  );
+  --color-login-slogan-challenge: var(--brand-isu-green);
+  --color-login-slogan-share: var(--brand-isu-blue);
+  --color-login-slogan-challenge-sheen: #e0f0c4;
+  --color-login-slogan-share-sheen: #b3ddf2;
   --color-login-slogan-outline: var(--brand-isu-night);
   --color-login-sky-top: var(--brand-isu-night);
   --color-login-sky-bottom: var(--brand-isu-dusk);
-  --color-login-panel: var(--neutral-frost);
-  --color-login-panel-border: var(--neutral-frost-edge);
+  --color-login-panel: color-mix(
+    in srgb,
+    var(--brand-isu-light-gray) 86%,
+    transparent
+  );
+  --color-login-panel-border: color-mix(
+    in srgb,
+    var(--brand-isu-silver) 45%,
+    transparent
+  );
   --color-login-scrim: var(--neutral-scrim);
 }

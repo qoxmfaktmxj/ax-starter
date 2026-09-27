@@ -1,10 +1,12 @@
 {
   "file": "isu-blocks.glb",
-  "generator": "tools/blender/build_isu_blocks.py",
+  "block_count": 26,
+  "generator": "tools/blender/build_isu_blocks.py for the 26-block geometry; Blender MCP material study and glTF export in output/blender-mcp-20260927",
   "blender": "5.2.1 LTS",
   "input": "tools/blender/isu-layout.json (scripts/export-isu-layout.ts, buildIsuLayout())",
   "external_assets": false,
   "compression": "KHR_draco_mesh_compression",
+  "material": "The official Blender Lab MCP server controlled Blender 5.2.1 to compare acrylic, glass, full-transmission, and balanced blue materials on the existing ISU geometry. The selected balanced Principled BSDF uses official ISU Blue and Green base colors, blue transmission 0.60, roughness 0.11, IOR 1.46, coat 0.50, and subtle subsurface scattering in the Blender study. The GLB carries KHR_materials_transmission, KHR_materials_ior, and KHR_materials_clearcoat; glTF does not carry Blender subsurface scattering. The browser scene applies water-scene-specific absorption and restrained reflections.",
   "attributes": "position, normal, uv (shared atlas, uv.smart_project + uv.pack_islands), color (R=AO, G=edge wear, B=per-block tint)",
   "note": "Block shapes are generated procedurally by the script. No models, textures or code from third-party sites are included.",
   "decoder": "apps/web/public/draco/* copied from three 0.183.2 examples/jsm/libs/draco/gltf (MIT via three)",
