@@ -1,83 +1,85 @@
 import * as THREE from "three";
 import { Reflector } from "three/addons/objects/Reflector.js";
+import { RIPPLE_AREA, RIPPLE_SIZE } from "./isu-ripples";
+import { SKY_LUT_GLSL } from "./isu-sky";
 
-const MAX_RIPPLES = 12;
+// 수면: 거울 반사(Reflector), Blender에서 구운 잔물결 법선 세 겹, 각도별 반사율, 햇빛 반짝임, 수평선 안개.
+// 판을 수평선 가까이까지 넓혀 판 끝이 수평선 아래에 띠로 보이지 않게 한다.
+const WATER_SIZE = 3000;
 
-export function createIsuWater(scene: THREE.Scene) {
-  const geometry = new THREE.PlaneGeometry(180, 180);
-  const ripples = Array.from(
-    { length: MAX_RIPPLES },
-    () => new THREE.Vector4(1000, 1000, -100, 0),
-  );
-  const flowDirections = Array.from(
-    { length: MAX_RIPPLES },
-    () => new THREE.Vector2(1, 0),
-  );
+export function createIsuWater(
+  scene: THREE.Scene,
+  options: { normalMap: THREE.Texture; skyLut: THREE.Texture },
+) {
+  const geometry = new THREE.PlaneGeometry(WATER_SIZE, WATER_SIZE);
   const shader = {
     uniforms: {
-      color: { value: new THREE.Color("#879da4") },
+      color: { value: new THREE.Color() },
       tDiffuse: { value: null },
       textureMatrix: { value: new THREE.Matrix4() },
       time: { value: 0 },
-      wave: { value: 0.075 },
-      rain: { value: 0 },
-      sunX: { value: 0 },
-      sunStrength: { value: 0 },
-      sunColor: { value: new THREE.Color("#ffd087") },
-      rippleCount: { value: 0 },
-      ripples: { value: ripples },
-      flowDirections: { value: flowDirections },
+      normalMap: { value: null },
+      skyLut: { value: null },
+      rippleMap: { value: null },
+      sunDirection: { value: new THREE.Vector3(0, 1, 0) },
+      sunIrradiance: { value: new THREE.Color() },
+      waterColor: { value: new THREE.Color() },
     },
     vertexShader: `uniform mat4 textureMatrix; varying vec4 vMirror; varying vec3 vWorld;
       void main(){vMirror=textureMatrix*vec4(position,1.);vWorld=(modelMatrix*vec4(position,1.)).xyz;
       gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-    fragmentShader: `uniform sampler2D tDiffuse;uniform vec3 color,sunColor;
-      uniform float time,wave,rain,sunX,sunStrength;
-      uniform vec4 ripples[12];uniform vec2 flowDirections[12];uniform int rippleCount;
-      varying vec4 vMirror;varying vec3 vWorld;
-      void main(){
-        vec2 p=vWorld.xz;
-        float bend=sin(p.x*.21+time*.13+sin(p.y*.24-time*.12)*.6)*.35
-          +sin(p.y*.16-time*.09)*.2;
-        float broad=sin(p.y*1.65+p.x*.34+bend+time*.31)*.55
-          +sin(p.y*2.7-p.x*.44-bend*.7-time*.23)*.28;
-        float fine=sin(p.y*8.5+p.x*1.7+bend*2.+time*.55)*sin(p.x*2.3-time*.28);
-        vec2 d=vec2(broad*.0044+fine*.0005,fine*.0022+bend*.001)*(.5+wave*2.8);
-        float wakeShine=0.;
-        for(int i=0;i<12;i++){
-          if(i>=rippleCount)break;
-          vec4 r=ripples[i];float age=max(time-r.z,0.);
-          vec2 direction=flowDirections[i];vec2 across=vec2(-direction.y,direction.x);
-          vec2 offset=p-r.xy;
-          float along=dot(offset,direction),side=dot(offset,across);
-          float lengthScale=2.3+age*.7,widthScale=.8+age*.5;
-          float wake=exp(-pow(along/lengthScale,2.)-pow(side/widthScale,2.))
-            *exp(-age*1.3)*r.w;
-          float fold=sin(along*2.1-age*1.7);
-          d+=(direction*.009+across*fold*.028)*wake*(1.+wave*2.);
-          wakeShine+=abs(fold)*wake;
-        }
-        d=clamp(d,vec2(-.04),vec2(.04));
-        vec2 uv=vMirror.xy/vMirror.w+d;
-        float depth=clamp((p.y+18.)/35.,0.,1.);
-        vec2 smear=vec2(.0014+depth*.002+abs(broad)*.0006,
-          .0006+depth*.0005+fine*.0002);
-        vec3 reflection=texture2D(tDiffuse,uv).rgb*.42;
-        reflection+=texture2D(tDiffuse,uv+smear).rgb*.29;
-        reflection+=texture2D(tDiffuse,uv-smear).rgb*.29;
-        float peak=max(reflection.r,max(reflection.g,reflection.b));
-        reflection*=1.-.4*smoothstep(.52,.98,peak);
-        float grazing=clamp(1.-abs(cameraPosition.y-vWorld.y)/max(length(cameraPosition-vWorld),.001),0.,1.);
-        vec3 c=mix(color,reflection,mix(.43,.76,grazing));
-        c+=vec3(.10,.14,.17)*pow(max(0.,broad*.48+fine*.28+.2),9.)*(1.+wave*2.);
-        float sunPath=exp(-pow((p.x-sunX*12.)/(.35+depth*1.8),2.));
-        float fleck=pow(max(0.,sin(p.y*10.5+bend*4.+time*.48)
-          *sin(p.x*4.7-p.y*1.3-time*.19)),4.);
-        float streak=pow(max(0.,sin(p.y*2.4+fine*.4-time*.12)),6.);
-        c+=sunColor*sunPath*sunStrength*(.016+fleck*.22+streak*.045);
-        c+=vec3(.24,.31,.34)*min(wakeShine*.3,.12);
-        c+=vec3(.08,.13,.16)*rain*min(wakeShine*.08,.06);
-        gl_FragColor=vec4(c,1.);
+    fragmentShader: `${SKY_LUT_GLSL}
+      uniform sampler2D tDiffuse, normalMap, skyLut, rippleMap;
+      uniform vec3 sunDirection, sunIrradiance, waterColor;
+      uniform float time;
+      varying vec4 vMirror;
+      varying vec3 vWorld;
+      vec2 waveSlope(vec2 p, float scale, vec2 flow) {
+        vec3 n = texture2D(normalMap, p * scale + flow * time).xyz * 2. - 1.;
+        return n.xy / max(n.z, .25);
+      }
+      void main() {
+        vec2 p = vWorld.xz;
+        float distance = length(cameraPosition.xz - p);
+        // x 방향으로 늘여 가로로 긴 물마루를 만든다. 참고 사진 1처럼 반사가 가로로 끊긴다.
+        vec2 q = p * vec2(.55, 1.);
+        vec2 wave = waveSlope(q, .045, vec2(.0035, .010)) * .28
+          + waveSlope(mat2(.8, -.6, .6, .8) * q, .13, vec2(-.008, .014)) * .26
+          + waveSlope(mat2(.6, .8, -.8, .6) * q, .41, vec2(.011, .019)) * .2;
+        vec2 rippleUv = (p - vec2(${RIPPLE_AREA.x.toFixed(1)}, ${RIPPLE_AREA.z.toFixed(1)})) / ${RIPPLE_AREA.size.toFixed(1)};
+        float edge = smoothstep(0., .06, min(min(rippleUv.x, 1. - rippleUv.x), min(rippleUv.y, 1. - rippleUv.y)));
+        const float texel = 1. / ${RIPPLE_SIZE.toFixed(1)};
+        vec2 ripple = vec2(
+          texture2D(rippleMap, rippleUv + vec2(texel, 0.)).r - texture2D(rippleMap, rippleUv - vec2(texel, 0.)).r,
+          texture2D(rippleMap, rippleUv + vec2(0., texel)).r - texture2D(rippleMap, rippleUv - vec2(0., texel)).r) * edge;
+        vec2 slope = wave + ripple * 8.;
+        vec3 normal = normalize(vec3(-slope.x, 1., -slope.y));
+        vec3 view = normalize(cameraPosition - vWorld);
+        float facing = clamp(dot(normal, view), 0., 1.);
+        // 물리값(5제곱)보다 반사를 조금 강하게 둔 연출값.
+        float fresnel = .02 + .98 * pow(1. - facing, 3.);
+        // 물결은 반사를 세로로 더 흔든다. 호버 물결의 흔들림은 0.004 안으로 제한한다.
+        vec2 wobble = clamp(vec2(wave.x * .4, wave.y) * .016, vec2(-.018), vec2(.018))
+          + clamp(ripple * .1, vec2(-.004), vec2(.004));
+        vec3 reflection = texture2D(tDiffuse, vMirror.xy / vMirror.w + wobble).rgb;
+        vec3 color = mix(waterColor, reflection, fresnel);
+        // 햇빛 반짝임(GGX, Kelemen 가시성). 멀수록 거칠게 해 넓은 빛길이 된다.
+        vec3 halfway = normalize(sunDirection + view);
+        float roughness = clamp(.07 + distance * .0015, .07, .24);
+        float alpha2 = roughness * roughness * roughness * roughness;
+        float nh = max(dot(normal, halfway), 0.);
+        float denominator = nh * nh * (alpha2 - 1.) + 1.;
+        float distribution = alpha2 / (3.1415927 * denominator * denominator);
+        float lh = max(dot(sunDirection, halfway), .1);
+        float sunFresnel = .02 + .98 * pow(1. - lh, 5.);
+        float nl = max(dot(normal, sunDirection), 0.);
+        // 물리값은 반짝임 하나가 수만까지 올라가 빛 번짐이 화면을 덮는다. 빛 번짐 기준(10) 아래로 묶는다.
+        color += min(sunIrradiance * distribution * sunFresnel * nl / (4. * lh * lh), vec3(6.));
+        // 먼 수면은 물결이 카메라 쪽으로 기울어 물속 색이 섞이며 회색 얼룩이 된다. 시선 방향 수평선의
+        // 하늘색보다 조금 어둡고 푸른 먼바다 색으로 고르게 녹여, 밝은 하늘과 사이에 수평선 한 줄을 남긴다.
+        vec3 horizon = texture2D(skyLut, skyLutUv(normalize(vec3(-view.x, 0., -view.z)))).rgb;
+        color = mix(color, horizon * vec3(.8, .9, .98), min(.9, 1. - exp(-distance * .006)));
+        gl_FragColor = vec4(color, 1.);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
@@ -92,63 +94,27 @@ export function createIsuWater(scene: THREE.Scene) {
   reflector.rotation.x = -Math.PI / 2;
   scene.add(reflector);
   const uniforms = (reflector.material as THREE.ShaderMaterial).uniforms;
-  const active: {
-    x: number;
-    z: number;
-    start: number;
-    strength: number;
-    dx: number;
-    dz: number;
-  }[] = [];
+  const normalMap = options.normalMap;
+  normalMap.wrapS = THREE.RepeatWrapping;
+  normalMap.wrapT = THREE.RepeatWrapping;
+  normalMap.colorSpace = THREE.NoColorSpace;
+  normalMap.anisotropy = 4;
+  uniforms.normalMap.value = normalMap;
+  uniforms.skyLut.value = options.skyLut;
 
   return {
-    color: uniforms.color.value as THREE.Color,
-    setConditions(wave: number, rain: number) {
-      uniforms.wave.value = wave;
-      uniforms.rain.value = rain;
-    },
-    setSun(x: number, strength: number, color: THREE.Color) {
-      uniforms.sunX.value = x;
-      uniforms.sunStrength.value = strength;
-      (uniforms.sunColor.value as THREE.Color).copy(color);
-    },
-    addRipple(
-      x: number,
-      z: number,
+    update(
       time: number,
-      strength: number,
-      dx = 1,
-      dz = 0,
+      rippleMap: THREE.Texture,
+      sunDirection: THREE.Vector3,
+      sunIrradiance: THREE.Color,
+      waterColor: THREE.Color,
     ) {
-      const length = Math.hypot(dx, dz) || 1;
-      active.push({
-        x,
-        z,
-        start: time,
-        strength,
-        dx: dx / length,
-        dz: dz / length,
-      });
-      if (active.length > MAX_RIPPLES) active.shift();
-    },
-    update(time: number) {
-      for (let i = active.length - 1; i >= 0; i--)
-        if (time - active[i].start > 3.5) active.splice(i, 1);
       uniforms.time.value = time;
-      uniforms.rippleCount.value = active.length;
-      active.forEach((ripple, index) => {
-        ripples[index].set(ripple.x, ripple.z, ripple.start, ripple.strength);
-        flowDirections[index].set(ripple.dx, ripple.dz);
-      });
-    },
-    get rippleEnergy() {
-      return active.reduce(
-        (sum, ripple) =>
-          sum +
-          ripple.strength *
-            Math.exp(-(uniforms.time.value - ripple.start) * 1.55),
-        0,
-      );
+      uniforms.rippleMap.value = rippleMap;
+      (uniforms.sunDirection.value as THREE.Vector3).copy(sunDirection);
+      (uniforms.sunIrradiance.value as THREE.Color).copy(sunIrradiance);
+      (uniforms.waterColor.value as THREE.Color).copy(waterColor);
     },
     resize(width: number, height: number) {
       reflector
@@ -162,6 +128,7 @@ export function createIsuWater(scene: THREE.Scene) {
       scene.remove(reflector);
       reflector.dispose();
       geometry.dispose();
+      normalMap.dispose();
     },
   };
 }

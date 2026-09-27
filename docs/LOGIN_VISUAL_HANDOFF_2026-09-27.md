@@ -12,15 +12,19 @@
 
 - ISU는 Blender에서 만든 26개 둥근 블록이다. S의 위아래를 잇는 사선은 세 블록이다. 파랑과 초록의 기준색은 공식 CI RGB인 `#008FD4`, `#99CA3C`다. 푸른 블록에는 매끄러운 틴팅 유리 재질과 부드러운 반사를 사용한다. 초록 점은 화면에서 색을 유지하려고 불투명하게 표현한다.
 - `Challenge the Future`와 `Share the Future`는 로그인 카드 위의 일반 HTML 텍스트다. 글자색은 분위기나 로그인 성공에 따라 바뀌지 않는다. Share는 처음부터 완전히 보이고 성공 시 따로 반짝이지 않는다. 마우스를 올린 글자 안쪽에만 작은 광택이 나타난다. 3D 글자와 글자의 수면 반사는 쓰지 않는다.
-- 장면은 첫 진입만 무작위다. 이후 청록 일출 `06`, 푸른 낮 `10`, 노을 `05`, 라벤더 잔광 `04`, 비 오는 저녁 `09`, 흑요석 밤 `08` 순서로 돈다. 각 장면은 15초 유지하고 다음 장면으로 5초 전환한다.
-- 해는 일출에서 수평선 아래로부터 올라와 낮에 높아지고, 노을 장면에서 다시 수면 아래로 내려간다. 해의 위치에 따라 ISU 방향광과 물 위의 잘게 끊어진 빛길이 함께 달라진다. 수면은 방향성 포인터 자취와 거리별 반사 흐림을 사용한다. 블록에 마우스를 올리거나 터치하면 해당 위치의 작은 빛이 반응한다.
+- 장면은 2분 연속 하루다. 첫 진입 시각만 무작위다. 해는 카메라 뒤(북동)에서 떠서 왼쪽 위(남쪽)를 지나 U와 로그인 카드 사이 수평선(북서)으로 진다. 해가 떠 있는 동안 일정한 속도로 움직이고 완전한 밤은 약 15초로 빠르게 지나간다. 하늘, 햇빛, 주변광, 물속 색, 노출은 모두 해 위치에서 계산한다. 비 장면은 없다. (2026-09-28 갱신)
+- 수면은 Blender에서 구운 잔물결 법선 세 겹, 각도별 반사율, GGX 햇빛 반짝임, 수평선 안개를 쓴다. 해가 정면에 있을 때만 빛길이 생긴다. 수면 위 포인터와 탭은 작은 파동 계산 물결을 만들고 약 1초 안에 사라진다. 블록에 마우스를 올리거나 터치하면 해당 위치의 작은 빛이 반응한다. 초록 블록은 CI 초록으로 스스로 빛나 밤에도 초록이 보인다.
 - 모션 감소 설정, WebGL 실패, 초기 로딩에서는 별도 WebP 정지 이미지를 사용한다. 정지 이미지에는 로그인 폼이나 HTML 슬로건이 그려져 있지 않다. 인증과 업무 권한 코드는 이번 시각 작업의 범위 밖이었다.
 
 ## 수정할 때 찾을 파일
 
 | 영역 | 경로 |
 | --- | --- |
-| 장면 순서, 15초 및 5초, 해의 궤도 | `apps/web/app/login/isu-water-moods.ts` |
+| 하루 주기와 해 궤적(2분, 밤 가속) | `apps/web/app/login/isu-day-cycle.ts` |
+| 대기 산란 상수와 CPU 조명 색 | `apps/web/app/login/isu-atmosphere.ts` |
+| 하늘 LUT, 해 원판, 별 | `apps/web/app/login/isu-sky.ts` |
+| 호버 물결 파동 계산 | `apps/web/app/login/isu-ripples.ts` |
+| 수면 법선 지도 굽기 | `tools/blender/bake_water_normals.py`, `apps/web/public/images/login/water-normal.webp` |
 | 하늘, 블록 조명, 포인터, 카메라 | `apps/web/app/login/isu-water-scene.ts` |
 | 물의 반사와 햇빛 질감 | `apps/web/app/login/isu-water.ts` |
 | 터치 이벤트와 WebGL 대체 | `apps/web/app/login/LoginScene.tsx` |
@@ -28,7 +32,7 @@
 | 블록 형태와 Blender 재현 | `apps/web/app/login/isu-layout.ts`, `tools/blender/build_isu_blocks.py`, `apps/web/public/models/` |
 | 정지 이미지와 출처 | `apps/web/public/images/login/` |
 | 색상 기준 | `packages/ui/tokens/index.css`, `packages/ui/semantic.css` |
-| 관련 검사 | `tests/unit/isu-water-moods.test.ts`, `tests/e2e/login-water.spec.ts`, `tests/e2e/login-scene.spec.ts` |
+| 관련 검사 | `tests/unit/isu-day-cycle.test.ts`, `tests/unit/isu-atmosphere.test.ts`, `tests/e2e/login-water.spec.ts`, `tests/e2e/login-scene.spec.ts` |
 
 ## 참고 자료와 재현 한계
 

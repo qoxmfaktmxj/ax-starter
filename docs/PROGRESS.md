@@ -346,3 +346,25 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 
 - 인계 작성 전 `HEAD`, 로컬 main과 원격 main은 `3bad3832977c53ab694449fcf959a85cee8fe5d6`으로 일치했다. 확인용 `/login`은 HTTP 200이고 Web 이미지는 `sha256:304fb0e9d06931221e78698c2ed244b41b414a794927f7250989eafdc10810d3`였다. 다른 작업 소유 파일 다섯 개의 해시도 이전 기록과 같았다.
 - `docs/LOGIN_VISUAL_HANDOFF_2026-09-27.md`를 작성했다. 현재 동작과 파일 경계, 검증 결과, 시각 캡처의 로컬 경로, 사용자 불만이 아직 특정되지 않았다는 점을 구분했다. 인계 파일에서 참조한 다섯 PNG가 현재 PC에 존재함을 확인했다. `git diff --check`와 문서의 금지 문자 검사는 통과했다. 앱 소스는 이 인계 작업에서 수정하지 않았다.
+
+## 2026-09-27 연속 하루와 수면 질감
+
+성공 기준은 고정 장면 여섯 개를 해 위치로 계산하는 2분 연속 하루로 바꾸고(밤 약 15초, 새벽과 노을 각각 약 11.5초, 해는 카메라 뒤 동쪽에서 떠서 정면 서쪽으로 짐), 대기 산란 하늘, 구운 잔물결 법선과 각도별 반사율을 쓰는 수면, 작은 파동 계산 호버 물결로 교체하는 것이다. 슬로건, 로그인 카드, 인증 코드, `LoginScene.tsx`, 모션 감소 대체와 입력 중 억제는 유지한다. 설계는 [연속 하루와 수면 설계](superpowers/specs/2026-09-27-login-daylight-water-design.md), 실행 계획은 [구현 계획](superpowers/plans/2026-09-27-login-daylight-water.md)이다.
+
+- `isu-day-cycle.ts`: 위도 45도, 적위 16도 궤적과 밤 가속 2.2배. 노을에서 해가 U 바로 옆에 있어 사용자 피드백 뒤 계획의 적위 15도를 16도로 옮겼다. 사전 계산 기준 밤 14.46초, 새벽과 노을 각각 11.78초, 정오 고도 61도, 일몰 지점 1440x900 화면 x 약 62.4%.
+- `isu-atmosphere.ts`, `isu-sky.ts`: 레일리, 미, 오존, 행성 그림자 단일 산란을 CPU 함수와 256x128 하늘 LUT 셰이더가 같은 상수로 계산한다. 해 원판, 별, 밤하늘 바닥값과 수평선 대기광을 더했다. 미 산란은 해 쪽 하늘이 하얗게 뿌옇지 않도록 표준값의 약 35%로 낮췄다.
+- `tools/blender/bake_water_normals.py`: Blender 5.2.1 Ocean 모디파이어 높이 한 프레임을 주기 경계 차분으로 법선 지도로 만든다. 첫 실행은 상대 캐시 경로 때문에 굽기 파일이 생기지 않았고 Blender가 예외에도 exit 0을 냈다. 절대 경로와 `--python-exit-code 1`로 고친 뒤 exit 0, 1024px 이음새 차 0.0052(이웃 0.0053), 저장 오차 0.0042/0.0061, WebP 70296/29834바이트. [굽기 로그](../output/daylight-water-20260927/bake-normals.log).
+- `isu-water.ts`, `isu-ripples.ts`, `isu-water-scene.ts`: 수면은 법선 세 겹, Schlick 반사율(3제곱 연출값), 상한 6의 GGX 반짝임, 먼바다 색 안개를 쓴다. 호버는 256x256 파동 방정식이며 반사 흔들림은 0.004 이하다. EffectComposer에 빛 번짐, 출력 변환(ACES), 채도 1.15와 대비 1.05 보정, 디더링을 넣었다.
+- 사용자가 중간 캡처를 보고 "빛이 너무 세다, 초록 블록이 너무 어둡다"고 했다. 해 원판과 빛 번짐, 반짝임 상한, 미 산란을 줄이고 초록 블록 발광색을 CI 초록으로 바꿨다. 수평선 아래 회색 띠는 거리 150 너머 수면을 빨강으로 칠하는 실험으로 먼 수면이 원인임을 확인한 뒤 먼바다 색 안개로 고쳤다. 밤하늘 바닥값을 올리며 대기 단위 검사의 밤 기준을 한낮 천정의 2%에서 4%로 완화했다. 호버 물결은 처음 값에서 보이지 않아 빨강 표시로 파동 계산이 정상임을 확인한 뒤 세기를 올렸다.
+- `pnpm check`: exit 0, 아키텍처 70개 소스 통과. `pnpm test`: exit 0, 9개 파일 40개 통과. 첫 전체 단위 검사는 보존 파일 백업을 `output/.../tests/unit/`에 둬서 vitest 경로 필터가 백업 Grid 검사 2개 파일을 실행해 실패했다. 백업을 `preserved.tar`로 묶은 뒤 통과. [검사](../output/daylight-water-20260927/check.log), [단위 검사](../output/daylight-water-20260927/unit.log).
+- 성능: 앱 내장 브라우저(GTX 1060, ANGLE D3D11, 1440x900, DPR 1)에서 10초 평균 143.96fps(모니터 주사율 상한). 처음 Playwright 창 측정 10fps는 게임이 GPU를 99% 쓰던 때였고, 같은 부하에서 이전 데모도 8.3fps였다. 다른 GPU와 실제 휴대폰은 측정하지 않았다.
+- `docker compose -p ax-daylight-water-20260927 -f compose.yaml -f output/daylight-water-20260927/compose.test.yaml --profile test build test-web test`: exit 0. 기존 fs trace 경고와 빌드 환경 auth 기본 secret 경고는 남았다. Git Bash의 경로 변환 때문에 첫 캡처 실행이 모듈을 찾지 못해 `MSYS_NO_PATHCONV=1`로 다시 실행했다. SwiftShader에서 등장 뒤 시각이 3초 넘게 밀려 보정값을 2.21초에서 5.7초로 고쳤고, 최종 캡처 9건의 시간대 이름은 모두 목표와 같았다. [캡처 로그](../output/daylight-water-20260927/capture.log), [노을](../output/daylight-water-20260927/sunset.png), [모바일 노을](../output/daylight-water-20260927/mobile-sunset.png), [호버 후](../output/daylight-water-20260927/hover-after.png).
+- 정지 대체 이미지: 고정 seed로는 모바일이 노을로 찍혀, 황혼 고도 -5도 아래까지 진행한 뒤 찍도록 바꿨다. 고도 -5.61도, 데스크톱 1920x1080 93642바이트, 모바일 780x908 31844바이트. 폼과 HTML 문구는 넣지 않았다.
+- 새 정지 이미지로 재빌드한 뒤 `run --rm test pnpm exec playwright test tests/e2e/login-scene.spec.ts tests/e2e/login-water.spec.ts`: 20개 통과, 실패와 skip 0, 9.4분. 새 검사는 수면 법선 실패 대체, 카드 위 포인터, 수면 탭이고 입력 중 해 정지와 호버 복귀 단언을 기존 검사에 더했다. [e2e](../output/daylight-water-20260927/e2e.log). 전체 e2e 41개는 실행하지 않았다.
+- 설계와 다른 점: 하늘은 처음부터 LUT로 계산했다. 법선 지도는 렌더러 전에 불러온다. 정지 이미지는 -3도 대신 -5.6도다. 반사율은 3제곱이다. `data-ripple-energy`는 넣은 세기를 벽시계 시간으로 줄인 값이다. 적위는 16도다. 빛 번짐 기준 10에 해 원판(정오 약 9.2)과 반짝임(상한 6)이 닿지 않아 실제로는 블록의 강한 반사광만 번지고 해 광채는 하늘 LUT가 만든다.
+- 새 문맥 검토자의 전체 검토: Critical 0, Important 2. 빛 번짐 설명이 사실과 다른 점은 모습을 유지하고 주석과 `provenance.json`을 고쳤다. 쓰이지 않는 4x MSAA 타깃은 `composer.renderTarget1.samples = 0`으로 없앴다. Minor 5건(물결 에너지 감쇠 순서, 144Hz 선분 덮어쓰기, 화면 아래 파동 영역 가장자리, 셰이더 이식성, 렌더러 생성 뒤 예외 정리)은 [다음 단계 계획](LOGIN_VISUAL_NEXT_PLAN_2026-09-28.md)에 넘겼다.
+- 사용자 요청으로 촌스러움의 원인 분석과 수면, 블록, 톤 단계별 개선 계획을 [다음 단계 계획](LOGIN_VISUAL_NEXT_PLAN_2026-09-28.md)에 적었다. 구현은 하지 않았다.
+- 검토 반영 뒤 최종 이미지 `sha256:70db21ce1ee9f577229f37dfbe3508918c9336c965513d607cbd3eebdab8c37d`로 같은 로그인 e2e를 다시 실행했다: 20개 통과, 실패와 skip 0, 8.6분. [최종 e2e](../output/daylight-water-20260927/e2e-final.log). 최종 `pnpm check` exit 0, `pnpm test` 9개 파일 40개 통과.
+- 이 이미지를 `ax-starter-water:local`로 태그해 `ax-water-demo-20260926`의 Web와 Worker를 `up -d --no-build --force-recreate web worker`로 다시 만들었다. `/login` HTTP 200, 두 컨테이너 이미지 ID가 위 ID와 같다. DB와 파일 volume을 유지했고 migrate/seed는 실행하지 않았다.
+- 검사 프로젝트 `ax-daylight-water-20260927`의 컨테이너 5개가 모두 이 프로젝트 라벨임을 확인한 뒤 `down --volumes --remove-orphans`로 컨테이너, 네트워크, test volume 2개를 정리했다. 참조 컨테이너가 없는 `ax-daylight-water-tools:20260927` 태그를 지웠고 데모가 쓰는 runtime 이미지는 보존했다.
+- 다른 작업 소유 파일 다섯 개의 SHA-256은 작업 전 기록과 모두 같다. 로그인 관련 파일만 커밋한다.

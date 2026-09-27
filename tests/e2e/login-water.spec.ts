@@ -136,6 +136,10 @@ test("water and ISU blocks respond to the pointer without shader errors", async 
   await expect
     .poll(() => metric(page, "ripple-energy"), { timeout: 30_000 })
     .toBeGreaterThan(0);
+  await page.mouse.move(0, 0);
+  await expect
+    .poll(() => metric(page, "ripple-energy"), { timeout: 3_000 })
+    .toBeLessThan(0.02);
 
   const blue = await page.evaluate(
     async (base64) => {
@@ -200,6 +204,30 @@ test("water and ISU blocks respond to the pointer without shader errors", async 
     .poll(() => metric(page, "block-light"), { timeout: 30_000 })
     .toBeLessThan(0.05);
   expect(errors).toEqual([]);
+});
+
+test("pointer over the login card leaves the water still", async ({ page }) => {
+  test.setTimeout(150_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/login");
+  await expect(canvas(page)).toHaveAttribute("data-intro", "complete", {
+    timeout: 90_000,
+  });
+  const panel = await page.locator(".loginPanel").boundingBox();
+  if (!panel) throw new Error("login card is missing");
+  const before = await metric(page, "pointer-hits");
+  for (const [x, y] of [
+    [0.2, 0.3],
+    [0.5, 0.6],
+    [0.8, 0.9],
+  ])
+    await page.mouse.move(
+      panel.x + panel.width * x,
+      panel.y + panel.height * y,
+    );
+  await page.waitForTimeout(1_500);
+  expect(await metric(page, "pointer-hits")).toBe(before);
+  expect(await metric(page, "ripple-energy")).toBe(0);
 });
 
 test("visible slogan sits 24 to 32 pixels above the desktop login card", async ({
@@ -389,6 +417,40 @@ test.describe("touch input", () => {
     expect(result.light).toBeGreaterThan(0.2);
   });
 
+  test("tapping the water starts a small ripple", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/login");
+    await expect(canvas(page)).toHaveAttribute("data-intro", "complete", {
+      timeout: 90_000,
+    });
+    const box = await canvas(page).boundingBox();
+    if (!box) throw new Error("scene canvas is missing");
+    const observed = page.evaluate(
+      () =>
+        new Promise<number>((resolve) => {
+          const surface =
+            document.querySelector<HTMLElement>(".loginSceneCanvas")!;
+          let energy = 0;
+          const observer = new MutationObserver(() => {
+            energy = Math.max(energy, Number(surface.dataset.rippleEnergy));
+          });
+          observer.observe(surface, {
+            attributes: true,
+            attributeFilter: ["data-ripple-energy"],
+          });
+          window.setTimeout(() => {
+            observer.disconnect();
+            resolve(energy);
+          }, 12000);
+        }),
+    );
+    await page.touchscreen.tap(
+      box.x + box.width * 0.5,
+      box.y + box.height * 0.9,
+    );
+    expect(await observed).toBeGreaterThan(0);
+  });
+
   test("a touch leaves the slogan readable and in place", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/login");
@@ -428,9 +490,9 @@ test("reduced motion removes the sheen and keeps the text visible", async ({
   await expect(text).toHaveCSS("transform", "none");
 });
 
-for (const [name, seed, id] of [
-  ["day", 0.2, "10"],
-  ["obsidian", 0.99, "08"],
+for (const [name, seed, part] of [
+  ["day", 0.5, "noon"],
+  ["night", 0, "night"],
 ] as const) {
   test(`both slogans keep their fixed colors through sign-in in ${name}`, async ({
     page,
@@ -462,7 +524,7 @@ for (const [name, seed, id] of [
       await expect(canvas(page)).toHaveAttribute("data-ready", "true", {
         timeout: 60_000,
       });
-      await expect(canvas(page)).toHaveAttribute("data-mood", id);
+      await expect(canvas(page)).toHaveAttribute("data-daypart", part);
       await expect(slogan(page)).toHaveCSS("opacity", "1");
       expect(await sloganColor(page, "Challenge")).toEqual([153, 202, 60]);
       expect(await sloganColor(page, "Share")).toEqual([0, 143, 212]);

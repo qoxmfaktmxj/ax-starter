@@ -170,6 +170,10 @@ test("slogan lines and calm survive sign-in", async ({ page }) => {
       timeout: 60_000,
     })
     .toBeGreaterThan(0.9);
+  const calmStart = Number(await canvas(page).getAttribute("data-day-time"));
+  await page.waitForTimeout(3_000);
+  const calmEnd = Number(await canvas(page).getAttribute("data-day-time"));
+  expect((calmEnd - calmStart + 120) % 120).toBeLessThan(0.4);
 
   await page.getByLabel("아이디").fill("hr-admin");
   await page.getByLabel("비밀번호").fill(fixturePassword());
@@ -192,4 +196,20 @@ test("a missing block model falls back to the still image", async ({
   await expect(
     page.locator(".loginSloganChallenge .loginSloganLetters"),
   ).toBeVisible();
+});
+
+test("a missing water normal map falls back to the still image", async ({
+  page,
+}) => {
+  await page.route("**/images/login/water-normal.webp", (route) =>
+    route.abort(),
+  );
+  await page.goto("/login");
+  await expect(canvas(page)).toHaveAttribute("data-ready", "false", {
+    timeout: 30_000,
+  });
+  await expect
+    .poll(() => sceneBackground(page))
+    .toContain("login-still-desktop.webp");
+  await expect(page.getByLabel("아이디")).toBeEditable();
 });

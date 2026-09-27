@@ -1,48 +1,64 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { loadBlockMeshes } from "./isu-blocks";
-import { buildIsuLayout } from "./isu-layout";
-import { createLoginMotion } from "./login-motion";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import {
-  advanceMood,
-  MOODS,
-  nextMood,
-  randomMood,
-  sunArc,
-  TRANSITION_SECONDS,
-  transitionStops,
-  type MoodId,
-  type MoodTimeline,
-} from "./isu-water-moods";
+  luminance,
+  skyRadiance,
+  SUN_INTENSITY,
+  sunTransmittance,
+  type Rgb,
+} from "./isu-atmosphere";
+import { loadBlockMeshes } from "./isu-blocks";
+import { advanceDay, daypart, randomDayTime, sunAt } from "./isu-day-cycle";
+import { buildIsuLayout } from "./isu-layout";
+import { createIsuRipples, RIPPLE_AREA } from "./isu-ripples";
+import { createIsuSky } from "./isu-sky";
 import { createIsuWater } from "./isu-water";
+import { createLoginMotion } from "./login-motion";
 
-const colorKeys = ["sky", "horizon", "water", "sun"] as const;
-const numberKeys = [
-  "power",
-  "ambient",
-  "exposure",
-  "rain",
-  "wave",
-  "haze",
-  "sunset",
-] as const;
-const palettes = Object.fromEntries(
-  Object.entries(MOODS).map(([id, mood]) => [
-    id,
-    {
-      ...mood,
-      sky: new THREE.Color(mood.sky),
-      horizon: new THREE.Color(mood.horizon),
-      water: new THREE.Color(mood.water),
-      sun: new THREE.Color(mood.sun),
-    },
-  ]),
-) as Record<
-  MoodId,
-  Omit<(typeof MOODS)[MoodId], (typeof colorKeys)[number]> & {
-    [Key in (typeof colorKeys)[number]]: THREE.Color;
-  }
->;
+// 조명과 노출 상수. 캡처로 조정할 때 이 표의 값만 바꾼다.
+const LIGHT = {
+  sun: 2.2, // 햇빛 방향광 = sun x 투과 휘도
+  sky: 1.8, // 반구광 = sky x 하늘 평균 휘도
+  rim: 0.45, // 뒤쪽 푸른 윤곽광
+  moon: 0.35, // 밤의 푸른 방향광
+  nightFill: 0.2, // 밤 반구광 바닥값
+  disc: 10, // 해 원판 HDR 밝기. 색은 투과를 정규화한다.
+  exposureKey: 0.8, // 노출 = key / sqrt(하늘 평균 휘도)
+  exposureMin: 0.8,
+  exposureMax: 3,
+  water: [0.012, 0.07, 0.15] as Rgb, // 물속 색 = (천정 0.6 + 하늘 평균 0.4) x 이 값
+  bloomStrength: 0.18,
+  bloomRadius: 0.25,
+  // 노출 전 선형값. 해 원판(정오 약 9.2)과 수면 반짝임(상한 6)은 닿지 않아 블록의 강한 반사광만 번진다.
+  // 해 주변 광채는 하늘 LUT의 미 산란이 만든다. "빛이 너무 세다"는 피드백으로 줄인 값이다.
+  bloomThreshold: 10,
+};
+
+// 출력 변환 뒤 색 보정. ACES가 빼는 채도와 대비를 조금 되돌리고, 8비트 하늘 그라디언트의
+// 띠를 미세한 디더링으로 없앤다.
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader:
+    "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }",
+  fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+    void main(){
+      vec4 color = texture2D(tDiffuse, vUv);
+      float gray = dot(color.rgb, vec3(.2126, .7152, .0722));
+      vec3 graded = mix(vec3(gray), color.rgb, 1.15);
+      graded = (graded - .5) * 1.05 + .5;
+      float noise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - .5;
+      gl_FragColor = vec4(clamp(graded, 0., 1.) + noise / 255., color.a);
+    }`,
+};
+
+const UP = { x: 0, y: 1, z: 0 };
+const AHEAD = { x: 0, y: 0.05, z: -1 };
+const BEHIND = { x: 0, y: 0.05, z: 1 };
 
 export async function createIsuWaterScene(
   canvas: HTMLCanvasElement,
@@ -51,23 +67,32 @@ export async function createIsuWaterScene(
   if (signal.aborted)
     throw new DOMException("Scene initialization cancelled", "AbortError");
   const layout = buildIsuLayout();
-  const modelBlocks = await loadBlockMeshes(layout.length, signal);
+  const mobile = window.matchMedia("(pointer: coarse)").matches;
+  const [modelBlocks, waterNormal] = await Promise.all([
+    loadBlockMeshes(layout.length, signal),
+    new THREE.TextureLoader().loadAsync(
+      mobile
+        ? "/images/login/mobile/water-normal.webp"
+        : "/images/login/water-normal.webp",
+    ),
+  ]);
   const geometries = modelBlocks.map((block) => block.geometry);
   if (signal.aborted) {
     geometries.forEach((geometry) => geometry.dispose());
+    waterNormal.dispose();
     throw new DOMException("Scene initialization cancelled", "AbortError");
   }
 
-  const mobile = window.matchMedia("(pointer: coarse)").matches;
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: !mobile,
+      antialias: false,
       powerPreference: "high-performance",
     });
   } catch (error) {
     geometries.forEach((geometry) => geometry.dispose());
+    waterNormal.dispose();
     throw error;
   }
   let shaderFailed = false;
@@ -93,62 +118,48 @@ export async function createIsuWaterScene(
       object.material.forEach((material) => material.dispose());
     else object.material.dispose();
   });
-  scene.fog = new THREE.FogExp2("#f0e6e0", 0.005);
-  const skyColor = new THREE.Color();
-  const horizonColor = new THREE.Color();
-  const sunColor = new THREE.Color();
-  const sunDirection = new THREE.Vector3(0, -0.13, -1);
-  const waterColor = new THREE.Color();
-  const skyGeometry = new THREE.SphereGeometry(180, 32, 16);
-  const skyMaterial = new THREE.ShaderMaterial({
-    uniforms: {
-      sky: { value: skyColor },
-      horizon: { value: horizonColor },
-      sunColor: { value: sunColor },
-      sunDirection: { value: sunDirection },
-      sunStrength: { value: 0 },
-      sunset: { value: 0 },
-    },
-    vertexShader: `varying vec3 vDirection;
-      void main(){vec4 p=modelMatrix*vec4(position,1.);vDirection=normalize(p.xyz);
-      gl_Position=projectionMatrix*viewMatrix*p;}`,
-    fragmentShader: `uniform vec3 sky,horizon,sunColor,sunDirection;
-      uniform float sunset,sunStrength;varying vec3 vDirection;
-      void main(){float h=smoothstep(-.04,.64,vDirection.y);
-      vec3 color=mix(horizon,sky,h);
-      float towardSun=dot(normalize(vDirection),normalize(sunDirection));
-      float halo=pow(max(towardSun,0.),90.);
-      float disc=smoothstep(.9935,.9955,towardSun);
-      vec3 discColor=mix(sunColor,vec3(1.,.6,.27),sunset*.65);
-      float horizonHaze=exp(-abs(vDirection.y)*46.);
-      color+=sunColor*horizonHaze*(.045+sunStrength*.09);
-      color+=discColor*halo*sunStrength*(.26+.2*sunset);
-      color=mix(color,discColor,disc*sunStrength*.9);
-      gl_FragColor=vec4(color,1.);
-      #include <tonemapping_fragment>
-      #include <colorspace_fragment>
-      }`,
-    side: THREE.BackSide,
-    depthWrite: false,
-    fog: false,
-  });
-  const sky = new THREE.Mesh(skyGeometry, skyMaterial);
-  sky.frustumCulled = false;
-  scene.add(sky);
+  const sky = createIsuSky(scene);
 
-  const camera = new THREE.PerspectiveCamera(49, 1, 0.1, 400);
+  const camera = new THREE.PerspectiveCamera(49, 1, 0.1, 2500);
   const ambient = new THREE.HemisphereLight(0xffffff, 0x708999, 1.8);
   scene.add(ambient);
-  const sun = new THREE.DirectionalLight(0xffffff, 1);
-  sun.position.set(-6, 9, 7);
-  scene.add(sun);
-  const rim = new THREE.DirectionalLight(0xc8efff, 0.55);
+  const sunLight = new THREE.DirectionalLight(0xffffff, 1);
+  scene.add(sunLight);
+  const moonLight = new THREE.DirectionalLight("#9fc4ff", 0);
+  moonLight.position.set(-6, 10, -8);
+  scene.add(moonLight);
+  const rim = new THREE.DirectionalLight(0xc8efff, LIGHT.rim);
   rim.position.set(4, 4, -6);
   scene.add(rim);
-  const rimBaseColor = rim.color.clone();
   const hoverLight = new THREE.PointLight("#c8eaff", 0, 2.7, 2);
   scene.add(hoverLight);
-  const water = createIsuWater(scene);
+  const ripples = createIsuRipples();
+  const water = createIsuWater(scene, {
+    normalMap: waterNormal,
+    skyLut: sky.lut,
+  });
+
+  const composer = new EffectComposer(
+    renderer,
+    new THREE.WebGLRenderTarget(1, 1, {
+      type: THREE.HalfFloatType,
+      samples: mobile ? 0 : 4,
+    }),
+  );
+  // 교환하는 패스가 둘(Output, Grade)이라 장면은 항상 renderTarget2에 그려진다. renderTarget1은 출력 결과만
+  // 받으므로 MSAA가 필요 없다. 교환 패스 수를 바꾸면 이 설정을 다시 확인한다.
+  composer.renderTarget1.samples = 0;
+  composer.addPass(new RenderPass(scene, camera));
+  composer.addPass(
+    new UnrealBloomPass(
+      new THREE.Vector2(1, 1),
+      LIGHT.bloomStrength,
+      LIGHT.bloomRadius,
+      LIGHT.bloomThreshold,
+    ),
+  );
+  composer.addPass(new OutputPass());
+  composer.addPass(new ShaderPass(GradeShader));
 
   const logo = new THREE.Group();
   scene.add(logo);
@@ -173,8 +184,9 @@ export async function createIsuWaterScene(
       spec.dot ? "#99ca3c" : "#80c7ea",
     );
     material.attenuationDistance = 1.8;
-    material.emissive = new THREE.Color(spec.dot ? "#2a3d00" : "#008fd4");
-    material.emissiveIntensity = spec.dot ? 0.22 : 0.025;
+    // 초록 블록은 해가 낮거나 밤이어도 CI 초록이 보이도록 같은 색으로 스스로 빛난다.
+    material.emissive = new THREE.Color(spec.dot ? "#99ca3c" : "#008fd4");
+    material.emissiveIntensity = spec.dot ? 0.15 : 0.025;
     material.needsUpdate = true;
     const mesh = new THREE.Mesh(geometries[index], material);
     const base = new THREE.Vector3(
@@ -192,70 +204,91 @@ export async function createIsuWaterScene(
   const raycaster = new THREE.Raycaster();
   const waterPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   const waterHit = new THREE.Vector3();
-  const previousHit = new THREE.Vector3(1000, 0, 1000);
-  let timeline: MoodTimeline = {
-    mood: randomMood(),
-    phase: "hold",
-    elapsed: 0,
-  };
+  const previousHit = new THREE.Vector3();
+  let hasPreviousHit = false;
+  let dayTime = randomDayTime();
+  const sunDirection = new THREE.Vector3(0, 1, 0);
+  const sunIrradiance = new THREE.Color();
+  const discColor = new THREE.Color();
+  const waterColor = new THREE.Color();
   let frameCount = 0;
   let activeTime = 0;
   let introTime = 0;
-  let calmTarget = false;
   let hoverIndex = -1;
   let openAmount = 0;
   let pointerHits = 0;
   let blockHits = 0;
-  let rainAccumulator = 0;
   let sharePending: (() => void) | null = null;
   let disposed = false;
-  const applyPalette = () => {
-    const stops =
-      timeline.phase === "transition"
-        ? transitionStops(timeline.mood, timeline.elapsed / TRANSITION_SECONDS)
-        : { from: timeline.mood, to: timeline.mood, mix: 0 };
-    const from = palettes[stops.from];
-    const to = palettes[stops.to];
-    const colors = {
-      sky: skyColor,
-      horizon: horizonColor,
-      water: waterColor,
-      sun: sunColor,
-    };
-    for (const key of colorKeys)
-      colors[key].copy(from[key]).lerp(to[key], stops.mix);
-    const values = {} as Record<(typeof numberKeys)[number], number>;
-    for (const key of numberKeys)
-      values[key] = THREE.MathUtils.lerp(from[key], to[key], stops.mix);
-    const arc = sunArc(timeline);
-    sunDirection.set(arc.x, arc.height, -1).normalize();
-    skyMaterial.uniforms.sunStrength.value = arc.strength;
-    ambient.intensity = values.ambient;
-    sun.intensity = values.power * (arc.active ? 0.6 + arc.strength * 0.4 : 1);
-    sun.color.copy(sunColor);
-    if (arc.active)
-      sun.position.set(-5 + arc.x * 20, 1 + Math.max(0, arc.height) * 40, 7);
-    else sun.position.set(-6, 9, 7);
-    rim.intensity = 0.55 + arc.strength * 0.3;
-    rim.color.copy(rimBaseColor).lerp(sunColor, arc.strength * 0.65);
-    renderer.toneMappingExposure = values.exposure;
-    scene.fog!.color.copy(horizonColor);
-    (scene.fog as THREE.FogExp2).density = values.haze;
-    skyMaterial.uniforms.sunset.value = values.sunset;
-    water.color.copy(waterColor);
-    water.setConditions(values.wave, values.rain);
-    water.setSun(arc.x, arc.strength, sunColor);
-    canvas.dataset.sunX = arc.x.toFixed(3);
-    canvas.dataset.sunHeight = arc.height.toFixed(3);
-    canvas.dataset.sunStrength = arc.strength.toFixed(2);
-    return values.rain;
+
+  // 해 위치 하나에서 하늘, 햇빛, 주변광, 물속 색, 노출을 모두 정한다.
+  const applyDaylight = () => {
+    const sun = sunAt(dayTime);
+    sunDirection.set(sun.x, sun.y, sun.z);
+    const transmittance = sunTransmittance(sun);
+    const zenith = skyRadiance(UP, sun);
+    const ahead = skyRadiance(AHEAD, sun);
+    const behind = skyRadiance(BEHIND, sun);
+    const average = [0, 1, 2].map(
+      (channel) => (zenith[channel] + ahead[channel] + behind[channel]) / 3,
+    ) as Rgb;
+    const skyLuminance = luminance(average);
+    const night = THREE.MathUtils.smoothstep(-sun.y, 0.05, 0.25);
+    const peak = Math.max(...transmittance, 1e-6);
+    sunLight.color.setRGB(
+      transmittance[0] / peak,
+      transmittance[1] / peak,
+      transmittance[2] / peak,
+    );
+    // 제곱근으로 낮은 해의 빛을 덜 줄여 일출과 일몰의 따뜻한 빛이 ISU 앞면에 보이게 한다.
+    sunLight.intensity = LIGHT.sun * Math.sqrt(luminance(transmittance));
+    sunLight.position.copy(sunDirection).multiplyScalar(20);
+    moonLight.intensity = LIGHT.moon * night;
+    const skyPeak = Math.max(...average, 1e-6);
+    ambient.color.setRGB(
+      average[0] / skyPeak,
+      average[1] / skyPeak,
+      average[2] / skyPeak,
+    );
+    ambient.intensity = LIGHT.sky * skyLuminance + LIGHT.nightFill * night;
+    // 물속 빛은 주로 위에서 내려온다. 수평선 쪽 노을색만 따라가면 탁한 녹회색이 된다.
+    waterColor.setRGB(
+      (zenith[0] * 0.6 + average[0] * 0.4) * LIGHT.water[0],
+      (zenith[1] * 0.6 + average[1] * 0.4) * LIGHT.water[1],
+      (zenith[2] * 0.6 + average[2] * 0.4) * LIGHT.water[2],
+    );
+    discColor
+      .copy(sunLight.color)
+      .multiplyScalar(
+        LIGHT.disc * THREE.MathUtils.smoothstep(sun.y, -0.01, 0.02),
+      );
+    sunIrradiance
+      .setRGB(transmittance[0], transmittance[1], transmittance[2])
+      .multiplyScalar(SUN_INTENSITY);
+    renderer.toneMappingExposure = THREE.MathUtils.clamp(
+      LIGHT.exposureKey / Math.sqrt(skyLuminance + 0.0004),
+      LIGHT.exposureMin,
+      LIGHT.exposureMax,
+    );
+    canvas.dataset.dayTime = dayTime.toFixed(2);
+    canvas.dataset.daypart = daypart(sun);
+    canvas.dataset.sunElevation = sun.elevation.toFixed(2);
+    canvas.dataset.sunAzimuth = sun.azimuth.toFixed(1);
+    return night;
   };
+
+  const insideRippleArea = (point: THREE.Vector3) =>
+    point.x > RIPPLE_AREA.x &&
+    point.x < RIPPLE_AREA.x + RIPPLE_AREA.size &&
+    point.z > RIPPLE_AREA.z &&
+    point.z < RIPPLE_AREA.z + RIPPLE_AREA.size;
 
   const resize = () => {
     const rect = canvas.getBoundingClientRect();
     const width = Math.max(1, rect.width);
     const height = Math.max(1, rect.height);
     renderer.setSize(width, height, false);
+    composer.setSize(width, height);
     camera.aspect = width / height;
     if (width < 700) {
       camera.fov = 56;
@@ -286,22 +319,9 @@ export async function createIsuWaterScene(
     const activeDelta = Math.min(delta, 0.06) * (1 - frame.calm * 0.7);
     activeTime += Math.min(wallDelta, 0.25) * (1 - frame.calm * 0.7);
     introTime += wallDelta;
-    if (timeline.phase === "transition" || (!calmTarget && frame.calm < 0.1))
-      timeline = advanceMood(timeline, wallDelta);
-    const rain = applyPalette();
-    rainAccumulator += Math.min(wallDelta, 1) * rain;
-    while (rainAccumulator > 0.3) {
-      rainAccumulator -= 0.3;
-      const angle = Math.random() * Math.PI * 2;
-      water.addRipple(
-        (Math.random() - 0.5) * 24,
-        (Math.random() - 0.5) * 22,
-        activeTime,
-        0.08,
-        Math.cos(angle),
-        Math.sin(angle),
-      );
-    }
+    // 입력 중(calm)에는 해가 멈춘다. 페이지 복귀 시 큰 시간 간격은 1초로 자른다.
+    dayTime = advanceDay(dayTime, Math.min(wallDelta, 1) * (1 - frame.calm));
+    const night = applyDaylight();
 
     hoverIndex = -1;
     if (pointer.x !== 2 && assetsReady) {
@@ -323,22 +343,22 @@ export async function createIsuWaterScene(
           );
           if (blocks[hoverIndex].hover < 0.1) blockHits++;
         }
-      }
-      if (raycaster.ray.intersectPlane(waterPlane, waterHit)) {
-        if (
-          Math.abs(waterHit.x) < 35 &&
-          Math.abs(waterHit.z) < 35 &&
-          waterHit.distanceTo(previousHit) > 0.24
-        ) {
-          water.addRipple(
+      } else if (
+        raycaster.ray.intersectPlane(waterPlane, waterHit) &&
+        insideRippleArea(waterHit)
+      ) {
+        // 처음 닿은 점(탭 포함)은 작은 눌림 하나, 이후에는 움직인 거리에 비례한 선분 눌림.
+        const moved = hasPreviousHit ? waterHit.distanceTo(previousHit) : 0;
+        if (!hasPreviousHit || moved > 0.02) {
+          ripples.disturb(
+            hasPreviousHit ? previousHit.x : waterHit.x,
+            hasPreviousHit ? previousHit.z : waterHit.z,
             waterHit.x,
             waterHit.z,
-            activeTime,
-            0.3,
-            previousHit.x === 100 ? 1 : waterHit.x - previousHit.x,
-            previousHit.z === 100 ? 0 : waterHit.z - previousHit.z,
+            hasPreviousHit ? Math.min(0.2, moved * 0.25) : 0.1,
           );
           previousHit.copy(waterHit);
+          hasPreviousHit = true;
           pointerHits++;
         }
       }
@@ -363,14 +383,23 @@ export async function createIsuWaterScene(
         block.base.z + 0.16 * spread,
       );
       block.material.emissiveIntensity = block.spec.dot
-        ? 0.22 + Math.sin(time * 2) * 0.06 + frame.share * 0.45
+        ? 0.15 + Math.sin(time * 2) * 0.04 + frame.share * 0.45
         : 0.025 + 0.035 * spread + frame.share * 0.12;
     }
     openAmount +=
       ((hoverIndex >= 0 ? 1 : 0) - openAmount) *
       (1 - Math.exp(-activeDelta * 6));
-    water.update(activeTime);
-    renderer.render(scene, camera);
+    // 에너지 값은 벽시계 시간으로 줄인다. 파동 계산 단계는 ripples 안에서 따로 제한한다.
+    ripples.update(renderer, Math.min(wallDelta, 1));
+    water.update(
+      activeTime,
+      ripples.texture,
+      sunDirection,
+      sunIrradiance,
+      waterColor,
+    );
+    sky.update(renderer, sunDirection, discColor, night, time);
+    composer.render(delta);
     if (shaderFailed) throw new Error("Water scene shader compilation failed");
     if (sharePending && frame.share >= 1) {
       sharePending();
@@ -382,20 +411,15 @@ export async function createIsuWaterScene(
     canvas.dataset.calm = frame.calm.toFixed(2);
     canvas.dataset.share = frame.share.toFixed(2);
     canvas.dataset.frames = String(++frameCount);
-    canvas.dataset.mood = timeline.mood;
-    canvas.dataset.nextMood = nextMood(timeline.mood);
-    canvas.dataset.phase = timeline.phase;
-    canvas.dataset.transitioning = String(timeline.phase === "transition");
-    canvas.dataset.elapsed = timeline.elapsed.toFixed(2);
     canvas.dataset.pointerHits = String(pointerHits);
-    canvas.dataset.rippleEnergy = water.rippleEnergy.toFixed(3);
+    canvas.dataset.rippleEnergy = ripples.energy.toFixed(3);
     canvas.dataset.openAmount = openAmount.toFixed(3);
     canvas.dataset.blockHits = String(blockHits);
     canvas.dataset.blockLight = hoverLight.intensity.toFixed(2);
   };
 
   resize();
-  applyPalette();
+  applyDaylight();
   return {
     resize,
     render,
@@ -405,10 +429,9 @@ export async function createIsuWaterScene(
     },
     pointerLeave() {
       pointer.set(2, 2);
-      previousHit.set(1000, 0, 1000);
+      hasPreviousHit = false;
     },
     calm(on: boolean) {
-      calmTarget = on;
       motion.calm(on);
     },
     shake() {
@@ -426,9 +449,11 @@ export async function createIsuWaterScene(
       disposed = true;
       sharePending?.();
       sharePending = null;
+      for (const pass of composer.passes) pass.dispose();
+      composer.dispose();
       water.dispose();
-      skyGeometry.dispose();
-      skyMaterial.dispose();
+      ripples.dispose();
+      sky.dispose();
       environment.dispose();
       for (const block of blocks) block.material.dispose();
       geometries.forEach((geometry) => geometry.dispose());
