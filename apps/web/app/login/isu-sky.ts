@@ -64,7 +64,11 @@ export function createIsuSky(scene: THREE.Scene) {
       uniform vec3 sunDirection, sunRadiance;
       uniform float stars, time;
       varying vec3 vDirection;
-      float starHash(vec3 cell) { return fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+      float starHash(vec3 cell) {
+        vec3 p = fract(cell * vec3(.1031, .11369, .13787));
+        p += dot(p, p.yzx + 33.33);
+        return fract((p.x + p.y) * p.z);
+      }
       void main() {
         vec3 direction = normalize(vDirection);
         vec3 color = texture2D(skyLut, skyLutUv(direction)).rgb;
@@ -73,13 +77,13 @@ export function createIsuSky(scene: THREE.Scene) {
         float radius = length(direction - sunDirection) / ${SUN_RADIUS};
         if (radius < 1. && cameraPosition.y > 0.) {
           float limb = 1. - .6 * (1. - sqrt(1. - radius * radius));
-          color += sunRadiance * limb * smoothstep(1., .85, radius) * smoothstep(-.004, .003, direction.y);
+          color += sunRadiance * limb * (1. - smoothstep(.85, 1., radius)) * smoothstep(-.004, .003, direction.y);
         }
         // 밤의 별: 방향을 격자로 나눠 드물게 점을 찍고 천천히 깜박인다.
         if (stars > 0.) {
           vec3 grid = direction * 320.;
           float seed = starHash(floor(grid));
-          float point = smoothstep(.32, 0., length(fract(grid) - .5)) * step(.9965, seed);
+          float point = (1. - smoothstep(0., .32, length(fract(grid) - .5))) * step(.9965, seed);
           float twinkle = .6 + .4 * sin(time * (1.5 + seed * 3.) + seed * 40.);
           color += vec3(.75, .85, 1.) * point * twinkle * stars * .06 * smoothstep(.02, .2, direction.y);
         }
@@ -93,9 +97,14 @@ export function createIsuSky(scene: THREE.Scene) {
   dome.frustumCulled = false;
   dome.renderOrder = -1;
   scene.add(dome);
+  const environmentScene = new THREE.Scene();
+  const environmentDome = new THREE.Mesh(domeGeometry, domeMaterial);
+  environmentDome.frustumCulled = false;
+  environmentScene.add(environmentDome);
 
   return {
     lut: lut.texture,
+    environmentScene,
     update(
       renderer: THREE.WebGLRenderer,
       sun: THREE.Vector3,
@@ -114,6 +123,7 @@ export function createIsuSky(scene: THREE.Scene) {
     },
     dispose() {
       scene.remove(dome);
+      environmentScene.remove(environmentDome);
       domeGeometry.dispose();
       domeMaterial.dispose();
       lutMaterial.dispose();

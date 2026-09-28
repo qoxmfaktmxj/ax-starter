@@ -368,3 +368,75 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - 이 이미지를 `ax-starter-water:local`로 태그해 `ax-water-demo-20260926`의 Web와 Worker를 `up -d --no-build --force-recreate web worker`로 다시 만들었다. `/login` HTTP 200, 두 컨테이너 이미지 ID가 위 ID와 같다. DB와 파일 volume을 유지했고 migrate/seed는 실행하지 않았다.
 - 검사 프로젝트 `ax-daylight-water-20260927`의 컨테이너 5개가 모두 이 프로젝트 라벨임을 확인한 뒤 `down --volumes --remove-orphans`로 컨테이너, 네트워크, test volume 2개를 정리했다. 참조 컨테이너가 없는 `ax-daylight-water-tools:20260927` 태그를 지웠고 데모가 쓰는 runtime 이미지는 보존했다.
 - 다른 작업 소유 파일 다섯 개의 SHA-256은 작업 전 기록과 모두 같다. 로그인 관련 파일만 커밋한다.
+
+## 2026-09-28 Blender 5.2.1 설치
+
+성공 기준은 이 PC에서 기존 3D 작업에 사용한 Blender 5.2.1을 실행하고, 백그라운드 Python API가 정상 작동하는지 확인하는 것이다.
+
+- `winget show --id BlenderFoundation.Blender --exact --source winget --accept-source-agreements`: 공식 Blender Foundation 패키지 5.2.1과 설치 파일 SHA-256 확인.
+- `winget install --id BlenderFoundation.Blender --exact --version 5.2.1 --source winget --accept-package-agreements --accept-source-agreements --silent --disable-interactivity`: 공식 MSI 다운로드와 해시 검증 후 관리자 권한 확인 단계에서 대기해 명령을 중단했다. 이후 `winget list --id BlenderFoundation.Blender --exact --source winget --accept-source-agreements`에서 5.2.1 설치를 확인했다.
+- 공식 Windows ZIP도 내려받아 게시된 SHA-256 `0e631dad7d0cad6d5d18abdd2e2550f6c0213215334eda00ddbd3d22b96ecb2c`와 일치함을 확인하고 사용자 계정에 압축 해제했다. 중복 사본과 임시 ZIP의 삭제 명령은 자동 정책에 의해 거부돼 두 파일이 남아 있다.
+- `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe --background --factory-startup --python-exit-code 1 --python-expr ...`: exit 0, `BLENDER_OK 5.2.1 LTS`. 현재 Codex 설정에는 Blender MCP 서버가 등록되지 않았다.
+
+## 2026-09-28 Blender Lab MCP 연결
+
+성공 기준은 공식 Blender Lab 확장과 MCP 서버를 설치하고, 실행 중인 Blender 5.2.1에서 읽기 전용 MCP 도구 호출이 성공하는 것이다.
+
+- 공식 소스 `https://projects.blender.org/lab/blender_mcp.git`를 사용자 계정의 `Programs/BlenderMCP`에 복제했다. HEAD는 이전 시안 작업에 사용한 `ff54e4d8f6b09502f2f466189cca0e52b4a91643`과 일치한다.
+- Blender CLI `extension build`로 `mcp-1.0.0.zip` 생성, `extension install-file --repo=user_default --enable`로 설치: 둘 다 exit 0. Blender 백그라운드 실행에서 `bl_ext.user_default.mcp` 활성화를 확인했다.
+- `uv tool install`로 해당 소스의 MCP 서버 1.0.2 설치: exit 0. Blender 확장에 필요한 온라인 접근 설정을 켜고 사용자 환경 설정을 저장했다.
+- `codex mcp add blender -- C:\Users\kms\.local\bin\blender-mcp.exe`: exit 0. `codex mcp get blender`에서 활성화된 stdio 서버 설정을 확인했다.
+- Blender GUI 프로세스 PID 48560을 실행하고 `127.0.0.1:9876` 수신을 확인했다. 별도 MCP 클라이언트가 도구 26개를 조회하고 읽기 전용 `get_objects_summary`를 호출했다: `isError=False`, 기본 Scene과 Cube 응답 확인.
+- 최초 Codex 세션의 도구 목록은 갱신되지 않아 앱을 재시작했다. 재시작 후 Blender MCP 도구 26개가 표시됐다. Blender 프로세스가 종료된 상태여서 GUI를 다시 실행했고, 실제 Codex MCP `get_objects_summary` 호출이 `isError=false`로 기본 Scene과 Cube를 반환했다.
+
+## 2026-09-28 로그인 수면과 톤 단계 A/C
+
+성공 기준은 사용자가 선택한 단계 A/C를 함께 적용해 잔잔한 수면, 거리별 반사 흐림, 절제된 시간대 색, 안정된 노출을 만들고 기존 로그인, 모바일, 모션 감소 동작을 유지하는 것이다. 수면 기준 질문에는 답이 없어 잔잔한 호수를 기본으로 적용했다. 블록 재질 단계 B는 세 후보 캡처를 본 뒤 선택하기로 했다.
+
+- `isu-water.ts`에서 세 겹 스크롤 법선을 여덟 방향의 분산 파동과 느린 바람 얼룩으로 바꿨다. 구운 법선은 미세 거칠기에만 사용한다. Reflector 밉맵과 세로 샘플로 거리별 흐림을 만들고 Schlick 5제곱, 법선 분산 기반 거칠기, 제한된 수평선 안개를 적용했다. `isu-ripples.ts`의 모바일 하단 영역과 빠른 포인터 이동 선분, 같은 프레임 에너지 감쇠를 고쳤다.
+- `isu-atmosphere.ts`의 황혼에 청회색 대기광을 더하고, `isu-water-scene.ts`의 노출을 해 고도별 고정 곡선으로 바꿨다. 밤과 황혼의 블록 기본 발광과 스튜디오 반사 세기도 하늘 밝기에 연동했고 로그인 성공 반응은 유지했다. 같은 정오 조건에서 [ACES](../output/playwright/login-water-aces-noon-20260928.png), [AgX](../output/playwright/login-water-agx-noon-20260928.png), [Neutral](../output/playwright/login-water-neutral-noon-20260928.png)을 캡처해 채도 추가 보정을 제거한 ACES를 유지했다. 별 해시와 역순 smoothstep도 수정했다.
+- [밤](../output/playwright/stage-ac-night.png), [새벽](../output/playwright/stage-ac-dawn.png), [일출](../output/playwright/stage-ac-sunrise.png), [정오](../output/playwright/stage-ac-noon.png), [일몰](../output/playwright/stage-ac-sunset.png), [황혼](../output/playwright/stage-ac-dusk.png), [모바일](../output/playwright/stage-ac-mobile.png)에서 WebGL 준비 상태를 확인하고 캡처했다. 10초 동안 5장을 캡처한 [수면 시작](../output/playwright/water-motion-0.png), [중간](../output/playwright/water-motion-2.png), [끝](../output/playwright/water-motion-4.png)에서 프레임은 161에서 849로 증가했다. 노을의 U 블록 역광 과노출은 단계 B의 재질 검토 대상으로 남긴다.
+- 새 황혼 장면에서 카드와 슬로건을 숨겨 데스크톱 1920x1080, 모바일 780x910 정지 이미지를 다시 만들었다. 캡처 원본은 [데스크톱](../output/playwright/still-ac-desktop.png), [모바일](../output/playwright/still-ac-mobile.png)이며 WebP는 ffmpeg libwebp 품질 86으로 변환했다. `provenance.json`에 재현 경로를 갱신했다.
+- `pnpm install --frozen-lockfile`: exit 0. 최종 `pnpm check`: exit 0, 경계 70개 소스. `pnpm test`: exit 0, 9개 파일 40개. `pnpm build`: exit 0. 기존 fs trace 경고 9건과 빌드 환경의 기본 auth secret 경고는 남았다. Impeccable detector 결과는 빈 목록이고 `git diff --check`도 통과했다.
+- 작업 전용 Chrome 설정 `output/playwright/host.config.ts`로 장면 관련 Playwright 7개를 실행해 모두 통과했다. 마지막 블록 조명 및 정지 이미지 변경 뒤 관련 2개도 다시 통과했다. 저장소 기본 Playwright 실행은 브라우저 미설치로 실패했고 브라우저 다운로드는 로컬 인증서 오류로 실패했다. Docker Desktop 엔진이 `docker ps`에 응답하지 않아 Docker의 전체 로그인 e2e 20개는 실행하지 못했다.
+- 실제 RTX 4060 Laptop GPU, 1440x900, 화면 60Hz에서 5.029초 동안 301프레임으로 약 59.85fps를 관측했다. 다른 GPU와 모바일 실기기 성능은 측정하지 않았다. 개발 서버가 생성한 `apps/web/AGENTS.md`, `apps/web/CLAUDE.md`는 제거했고 `next-env.d.ts`는 빌드 뒤 원래 내용으로 돌아왔다.
+
+## 2026-09-28 일몰 역광 번짐 조정
+
+성공 기준은 해가 U와 겹치는 순간의 넓은 흰 번짐을 줄여 블록 윤곽을 다시 읽을 수 있게 하고, 사용자가 좋다고 한 물결 질감과 해의 좁은 빛길은 유지하는 것이다.
+
+- 사용자가 제공한 화면과 같은 1677x867 비율에서 시작 시각 99, 100.5, 102, 103.5초를 고정해 재현했다. [기존 4도 구간](../output/playwright/glare-baseline-100.5.png)은 U와 수면 앞쪽까지 흰빛이 퍼졌다.
+- 전역 Bloom 세기를 0으로 만든 [비교](../output/playwright/glare-no-bloom-100.5.png)에서는 U 윤곽과 수면의 좁은 빛길이 남았다. 세기 0.04의 [비교](../output/playwright/glare-soft-bloom.png)에서도 U가 다시 흐려져 `isu-water-scene.ts`에서 Bloom 패스와 전용 상수, import를 제거했다. 물 파형, 반사, 해 궤적은 바꾸지 않았다.
+- 같은 구간의 [최종 4도](../output/playwright/glare-final-100.5.png), [최종 2도](../output/playwright/glare-final-102.png), [모바일 일몰](../output/playwright/stage-ac-mobile.png)을 직접 확인했다. 유리 재질의 오른쪽 좁은 반짝임은 남으며 단계 B의 블록 재질 비교에서 다룬다.
+- 새 장면으로 데스크톱 및 모바일 황혼 정지 이미지를 다시 캡처하고 ffmpeg libwebp 품질 86으로 교체했다. 최종 해 고도는 각각 -6.19도, -5.74도이며 `provenance.json`에 반영했다.
+- `pnpm check`: exit 0, 아키텍처 70개 소스. `pnpm test`: exit 0, 단위 검사 40개. `pnpm build`: exit 0, 기존 fs trace 경고 9건. 작업 전용 Chrome에서 관련 로그인 장면 e2e 3개 통과. Impeccable detector는 빈 목록이었다. Docker 전체 e2e는 이번에도 실행하지 않았다.
+
+## 2026-09-28 ISU 블록 재질 단계 B 후보 비교 진행 중
+
+성공 기준은 금속, 서리 유리, 세라믹을 같은 로그인 장면과 시간대에서 비교하고 사용자 선택 뒤 한 재질로 확정하는 것이다. 선택 전에는 후보를 최종 구현으로 표기하지 않는다.
+
+- Blender MCP `get_objects_summary`와 `execute_blender_code`로 기존 GLB를 불러와 26개 블록, 공유 UV 한 겹, 파랑 및 초록 Principled 재질을 확인했다. 기존 파랑 재질은 Roughness 약 0.11, Transmission 약 0.60이었다.
+- 현재 로그인 장면에 하늘 LUT를 반영한 64px PMREM 환경 반사, 블록 normal 지도와 detail 지도에서 만든 거칠기 지도, 바닥 접촉 어두움, 작은 기울기 및 약 0.025 단위 들림 호버를 시안으로 연결했다. 기존 고정 발광과 포인터 점광원은 제거하고 성공 시 일시적인 반응만 남겼다. 비교를 위한 `material` 쿼리 분기는 선택 후 제거할 임시 코드다.
+- 같은 정오와 일몰에서 [금속](../output/playwright/block-metal-sunset.png), [서리 유리](../output/playwright/block-glass-sunset.png), [세라믹](../output/playwright/block-ceramic-sunset.png)을 캡처했다. 밤 비교는 [금속](../output/playwright/block-metal-night-moon.png), [서리 유리](../output/playwright/block-glass-night-sheen.png), [세라믹](../output/playwright/block-ceramic-night-moon.png)에 있다. 유리는 밤에 다른 후보보다 어두워 사용자에게 알렸다.
+- `pnpm check`: exit 0, 아키텍처 70개 소스. `pnpm test`: exit 0, 단위 검사 40개. RTX 4060 Laptop GPU의 1440x900 금속 시안에서 5초 300프레임, 약 59.99fps, 프레임 간격 p95 16.9ms와 최대 25.6ms를 관측했다. 호버 지표는 light 0.22, open 0.259로 증가하고 포인터 이탈 뒤 light 0.05 미만으로 돌아왔다. 최종 빌드와 전체 로그인 e2e는 사용자 선택 후 실행한다.
+
+## 2026-09-28 금속 및 유리 방문별 랜덤 적용
+
+성공 기준은 사용자 선택에 따라 세라믹을 제외하고 로그인 방문마다 금속 또는 유리를 50:50으로 고른 뒤 해당 화면이 열려 있는 동안 재질을 고정하는 것이다. 모션 감소와 WebGL 실패 때도 같은 재질의 정지 이미지를 표시하고, 수면과 로그인 동작을 유지한다.
+
+- `LoginScene.tsx`에서 방문당 한 번 재질을 선택해 canvas에 기록하고 장면 생성에 전달한다. `material=metal` 또는 `material=glass` 쿼리는 로컬 시안 재현용 선택값이며 쿼리가 없으면 50:50 무작위다. `isu-water-scene.ts`의 세라믹 분기를 제거했다.
+- Blender 5.2.1로 `tools/blender/build_isu_blocks.py`의 모서리 비율을 0.15에서 0.10으로 낮춰 전체 재생성했다: exit 0, 블록 26개, 삼각형 114252개, inward 및 degenerate 0, 고해상도 굽기 합계 76.3초, GLB 359792바이트. [생성 로그](../output/blender-b-20260928/build.log)를 보존했다. Blender MCP로 새 GLB를 불러와 메시 26개를 확인했다. 기존 GLB와 질감 지도 다섯 개는 `output/blender-b-20260928/before/`에 보존했다.
+- 갱신한 detail 지도의 G 채널을 200 + 0.2 x 원래 값으로 변환해 데스크톱과 모바일 거칠기 지도를 만들었다. 모델 및 지도 파일의 SHA-256과 변환 방법을 `provenance.json`에 기록했다.
+- 같은 장면에서 [금속 정오](../output/blender-b-20260928/final-metal-noon.png), [금속 일몰](../output/blender-b-20260928/final-metal-sunset.png), [금속 밤](../output/blender-b-20260928/final-metal-night.png), [유리 정오](../output/blender-b-20260928/final-glass-noon.png), [유리 일몰](../output/blender-b-20260928/final-glass-sunset.png), [유리 밤](../output/blender-b-20260928/final-glass-night.png)을 캡처했다. 두 재질의 데스크톱 및 모바일 황혼 정지 이미지를 별도로 만들고 WebP 품질 86으로 교체했다. 유리는 밤에 금속보다 어둡지만 모서리와 글자 윤곽은 보인다.
+- `pnpm check`: exit 0, 아키텍처 70개 소스. `pnpm test`: exit 0, 단위 검사 40개. `pnpm build`: exit 0, 기존 fs trace 경고 9건. 작업 전용 Chrome의 로그인 장면 검사 8개 통과, 모바일 정지 이미지 분기 2개도 재확인해 통과했다. Impeccable detector는 기존 오류 문구의 `border-left` 한 건을 지적했으며 이번 재질 작업 범위 밖이라 바꾸지 않았다. Docker 전체 로그인 e2e는 엔진이 응답하지 않아 실행하지 않았다.
+- RTX 4060 Laptop GPU, 1440x900, 화면 60Hz에서 금속 5.010초/301프레임, 유리 5.015초/301프레임을 관측했다. 로컬 production 빌드는 `pnpm start` 실행 시 Next 정적 청크가 누락돼 브라우저에서 404가 났다. `pnpm exec next start apps/web -p 3000`으로 미리보기를 전환한 뒤 WebGL ready와 HTTP 200을 확인했다. 쿼리 없는 로그인 30회 새로고침에서는 금속 16회, 유리 14회가 나왔다. 이 표본을 확률의 증명으로 사용하지 않는다.
+
+## 2026-09-28 금속 블록 색 전환과 모서리 개선
+
+성공 기준은 사용자가 지적한 금속 블록의 갑작스러운 반사색 전환을 부드럽게 만들고, S의 사선 및 아래 블록 모서리의 거친 재질을 줄이는 것이다. 금속/유리 방문별 선택, 수면, 로그인 입력, 모바일 대체 화면도 동작해야 한다.
+
+- 원인은 해 방향이 2도 움직일 때마다 PMREM 환경 지도를 즉시 교체하는 처리였다. 금속과 유리 블록 셰이더에서 이전/다음 지도를 0.8초 동안 보간하도록 바꿨다. 일몰 전후 24장 [연속 캡처](../output/block-polish-20260928/sky-00.png)에서 반사색 전환을 확인했다. 금속은 거칠기를 0.40에서 0.46으로 높이고 환경 반사, 코트, 법선 강도를 낮췄다.
+- 법선/거칠기 지도를 각각 끈 비교에서도 S의 사선과 아래 모서리 선이 남아 모델을 수정했다. Blender 생성기의 복셀 크기를 0.036에서 0.024로 줄이고 모서리 반경 비율을 0.13, 부드러운 법선 각도를 75도로 바꿨다. UV 섬 여백과 굽기 경계를 맞추고 미사용 법선 픽셀을 중립값으로 채웠다. [최종 생성 로그](../output/block-polish-20260928/final-bake.log): exit 0, 26개 블록, 261792개 삼각형, 안쪽 면과 퇴화 면 각각 0, 고해상도 굽기 66.1초. Blender MCP에서 최종 GLB의 메시 26개를 다시 확인했다.
+- 새 GLB와 데스크톱/모바일 법선, 디테일, 거칠기 지도를 적용했다. [수정 전](../output/block-polish-20260928/before-noon-1039.png), [수정 후](../output/block-polish-20260928/after-noon.png)를 비교했다. 금속/유리 각각 데스크톱과 모바일 황혼 정지 이미지를 다시 캡처해 교체했고, 생성 정보와 SHA-256을 `provenance.json`에 기록했다. S를 구성하는 별도 블록 사이의 얇은 틈은 남는다.
+- 모바일 배치 검사는 방문별 랜덤 재질 중 어두운 유리가 선택되면 금속에 맞춘 파랑 픽셀 기준에서 실패했다. 해당 배치 검사를 `material=metal`로 고정해 다시 실행했다: 1개 통과. 프로덕션 서버에서 장면, 재질별 정지 이미지, 모바일 배치, 터치 동작 등 관련 Playwright 7개가 통과했다.
+- `pnpm check`: exit 0, 경계 70개 소스. `pnpm test`: exit 0, 9개 파일 40개. 첫 `pnpm build`는 `APP_PROFILE`이 없어 fixture OIDC 보호 검사에서 실패했다. `APP_PROFILE=local`로 다시 실행한 `pnpm build`는 exit 0이며 기존 파일 추적 경고 9건은 남았다. `pnpm exec next start apps/web -p 3000`에서 로그인, GLB, 법선/거칠기 지도, 모바일 정지 이미지 HEAD 요청이 모두 HTTP 200이었다. Impeccable detector는 지적 사항이 없었다. RTX 4060 Laptop GPU, 1440x900, 60Hz에서 금속 301프레임/5.012초, 유리 302프레임/5.017초를 관측했다. Docker 전체 e2e와 실제 모바일 기기 성능은 검사하지 않았다.

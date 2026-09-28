@@ -31,9 +31,9 @@ import bpy
 import numpy as np
 from mathutils import Vector, noise
 
-VOXEL = 0.036  # 리메시 해상도(월드 단위)
+VOXEL = 0.024  # 리메시 해상도(월드 단위)
 VOXEL_HI = 0.008  # 고해상도 조각본 리메시 해상도(월드 단위)
-BEVEL_RADIUS_RATIO = 0.15  # 모서리 둥글기 반경: 블록의 가장 짧은 변의 이 비율
+BEVEL_RADIUS_RATIO = 0.13  # 모서리 둥글기 반경: 블록의 가장 짧은 변의 이 비율
 BEVEL_RADIUS_DEPTH_CAP = 0.30  # 반경이 두께(depth)의 이 비율을 넘지 않게 한다
 BEVEL_SEGMENTS = 6
 FRONT_BULGE_MAX = 0.015  # 앞면 가운데가 부풀어 오르는 최대 깊이(월드 단위)
@@ -174,7 +174,7 @@ def sculpt(obj, spec, seed):
     half = Vector((width / 2, depth / 2, height / 2))
     bevel = obj.modifiers.new("bevel", "BEVEL")
     # 모든 모서리를 크게, 손으로 깎은 자국 없이 매끈하게 둥글린다. 반경은 가장 짧은 변의
-    # 15%(두께의 30%를 넘지 않게), 원형 단면 6분할.
+    # 13%(두께의 30%를 넘지 않게), 원형 단면 6분할.
     radius = min(width, height, depth) * BEVEL_RADIUS_RATIO
     radius = min(radius, depth * BEVEL_RADIUS_DEPTH_CAP)
     bevel.width = radius
@@ -209,7 +209,7 @@ def sculpt(obj, spec, seed):
     for polygon in obj.data.polygons:
         polygon.use_smooth = True
     # 이 빠진 평평한 면과 몸통 경계를 날카롭게, 나머지는 부드럽게 유지한다.
-    obj.data.set_sharp_from_angle(angle=math.radians(32))
+    obj.data.set_sharp_from_angle(angle=math.radians(75))
     return inward, degenerate
 
 
@@ -279,7 +279,7 @@ def build_hires_duplicate(obj, spec, seed):
     bm.free()
     for polygon in hires.data.polygons:
         polygon.use_smooth = True
-    hires.data.set_sharp_from_angle(angle=math.radians(32))
+    hires.data.set_sharp_from_angle(angle=math.radians(75))
     return hires, triangle_count, inward, degenerate
 
 
@@ -292,7 +292,7 @@ def unwrap_atlas(blocks):
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.uv.smart_project(angle_limit=math.radians(66))
-    bpy.ops.uv.pack_islands(margin=0.004)
+    bpy.ops.uv.pack_islands(margin=0.008)
     bpy.ops.object.mode_set(mode="OBJECT")
 
 
@@ -384,6 +384,7 @@ def bake_detail_atlas(blocks, layout, size, limit=None):
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
+    scene.render.bake.margin = 4
 
     normal_image = new_atlas_image("isu-blocks-normal", size)
     ao_image = new_atlas_image("isu-blocks-ao-detail", size)
@@ -456,6 +457,13 @@ def bake_detail_atlas(blocks, layout, size, limit=None):
         )
 
     bpy.data.objects.remove(ground, do_unlink=True)
+    pixels = np.empty(size * size * 4, dtype=np.float32)
+    normal_image.pixels.foreach_get(pixels)
+    normals = pixels.reshape(-1, 4)
+    unused = np.all(normals[:, :3] < 1e-5, axis=1)
+    normals[unused, :3] = (0.5, 0.5, 1.0)
+    normal_image.pixels.foreach_set(pixels)
+    normal_image.update()
     return normal_image, ao_image, convexity_image, hires_stats
 
 

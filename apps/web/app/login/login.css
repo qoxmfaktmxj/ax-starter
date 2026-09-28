@@ -31,6 +31,11 @@
     url("/images/login/login-still-desktop.webp") center / cover no-repeat;
 }
 
+.loginScene:has(canvas[data-material="metal"][data-ready="false"]),
+.loginScene:has(canvas[data-material="metal"][data-ready="static"]) {
+  background-image: url("/images/login/login-still-metal-desktop.webp");
+}
+
 .loginSceneCanvas {
   display: block;
   width: 100%;
@@ -255,5 +260,10 @@
   .loginScene:has(canvas[data-ready="static"]) {
     background-image: url("/images/login/login-still-mobile.webp");
     background-position: center top;
+  }
+
+  .loginScene:has(canvas[data-material="metal"][data-ready="false"]),
+  .loginScene:has(canvas[data-material="metal"][data-ready="static"]) {
+    background-image: url("/images/login/login-still-metal-mobile.webp");
   }
 }

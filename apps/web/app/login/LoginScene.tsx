@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
-import type { createIsuWaterScene } from "./isu-water-scene";
+import type {
+  BlockMaterialVariant,
+  createIsuWaterScene,
+} from "./isu-water-scene";
 
 type IsuScene = Awaited<ReturnType<typeof createIsuWaterScene>>;
 type ReadyState = "loading" | "false" | "static";
@@ -16,6 +19,7 @@ export type LoginSceneHandle = {
 export default function LoginScene({ ref }: { ref?: Ref<LoginSceneHandle> }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<IsuScene | null>(null);
+  const materialRef = useRef<BlockMaterialVariant | null>(null);
 
   useImperativeHandle(
     ref,
@@ -30,6 +34,19 @@ export default function LoginScene({ ref }: { ref?: Ref<LoginSceneHandle> }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    if (!materialRef.current) {
+      const requested = new URLSearchParams(window.location.search).get(
+        "material",
+      );
+      materialRef.current =
+        requested === "metal" || requested === "glass"
+          ? requested
+          : Math.random() < 0.5
+            ? "metal"
+            : "glass";
+    }
+    const material = materialRef.current;
+    canvas.dataset.material = material;
     const setState = (ready: ReadyState) => {
       canvas.dataset.ready = ready;
       canvas.dataset.preview = "false";
@@ -149,7 +166,7 @@ export default function LoginScene({ ref }: { ref?: Ref<LoginSceneHandle> }) {
     canvas.addEventListener("webglcontextrestored", restoredContext);
     import("./isu-water-scene")
       .then((module) =>
-        module.createIsuWaterScene(canvas, initialization.signal),
+        module.createIsuWaterScene(canvas, initialization.signal, material),
       )
       .then((result) => {
         if (disposed) {

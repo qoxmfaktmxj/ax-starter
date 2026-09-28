@@ -13,6 +13,16 @@ const sceneBackground = (page: Page) =>
   page
     .locator(".loginScene")
     .evaluate((element) => getComputedStyle(element).backgroundImage);
+const expectMatchingStill = async (page: Page) => {
+  const material = await canvas(page).getAttribute("data-material");
+  await expect
+    .poll(() => sceneBackground(page))
+    .toContain(
+      material === "metal"
+        ? "login-still-metal-desktop.webp"
+        : "login-still-desktop.webp",
+    );
+};
 
 test("the form works while the required block model is still loading", async ({
   page,
@@ -59,9 +69,7 @@ test("unavailable WebGL shows the still image and keeps the form", async ({
   });
   await page.goto("/login");
   await expect(canvas(page)).toHaveAttribute("data-ready", "false");
-  await expect
-    .poll(() => sceneBackground(page))
-    .toContain("login-still-desktop.webp");
+  await expectMatchingStill(page);
   await expect(page.getByLabel("아이디")).toBeEditable();
   await expect(
     page.locator(".loginSloganChallenge .loginSloganLetters"),
@@ -77,9 +85,7 @@ test("reduced motion skips WebGL and shows the still image", async ({
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/login");
   await expect(canvas(page)).toHaveAttribute("data-ready", "static");
-  await expect
-    .poll(() => sceneBackground(page))
-    .toContain("login-still-desktop.webp");
+  await expectMatchingStill(page);
   await expect(
     page.locator(".loginSloganChallenge .loginSloganLetters"),
   ).toBeVisible();
@@ -87,6 +93,32 @@ test("reduced motion skips WebGL and shows the still image", async ({
     page.locator(".loginSloganShare .loginSloganLetters"),
   ).toBeVisible();
 });
+
+for (const [seed, material, image] of [
+  [0.25, "metal", "login-still-metal-desktop.webp"],
+  [0.75, "glass", "login-still-desktop.webp"],
+] as const) {
+  test(`a ${material} visit keeps its matching still image`, async ({
+    page,
+  }) => {
+    await page.addInitScript((value) => {
+      Math.random = () => value;
+    }, seed);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/login");
+    await expect(canvas(page)).toHaveAttribute("data-material", material);
+    await expect(canvas(page)).toHaveAttribute("data-ready", "static");
+    await expect.poll(() => sceneBackground(page)).toContain(image);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect
+      .poll(() => sceneBackground(page))
+      .toContain(
+        material === "metal"
+          ? "login-still-metal-mobile.webp"
+          : "login-still-mobile.webp",
+      );
+  });
+}
 
 test("the ISU scene finishes its entrance when WebGL is available", async ({
   page,
@@ -189,9 +221,7 @@ test("a missing block model falls back to the still image", async ({
   await expect(canvas(page)).toHaveAttribute("data-ready", "false", {
     timeout: 30_000,
   });
-  await expect
-    .poll(() => sceneBackground(page))
-    .toContain("login-still-desktop.webp");
+  await expectMatchingStill(page);
   await expect(page.getByLabel("아이디")).toBeEditable();
   await expect(
     page.locator(".loginSloganChallenge .loginSloganLetters"),
@@ -208,8 +238,6 @@ test("a missing water normal map falls back to the still image", async ({
   await expect(canvas(page)).toHaveAttribute("data-ready", "false", {
     timeout: 30_000,
   });
-  await expect
-    .poll(() => sceneBackground(page))
-    .toContain("login-still-desktop.webp");
+  await expectMatchingStill(page);
   await expect(page.getByLabel("아이디")).toBeEditable();
 });

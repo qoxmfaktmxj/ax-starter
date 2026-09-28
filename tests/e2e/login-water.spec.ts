@@ -108,6 +108,9 @@ test("water and ISU blocks respond to the pointer without shader errors", async 
   page,
 }) => {
   test.setTimeout(150_000);
+  await page.addInitScript(() => {
+    Math.random = () => 0.49;
+  });
   await page.setViewportSize({ width: 960, height: 540 });
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -256,7 +259,7 @@ test("mobile slogan and card fit without overlap or horizontal overflow", async 
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/login");
+  await page.goto("/login?material=metal");
   await expect(canvas(page)).toHaveAttribute("data-ready", "static");
   const text = await slogan(page).boundingBox();
   const panel = await page.locator(".loginPanel").boundingBox();

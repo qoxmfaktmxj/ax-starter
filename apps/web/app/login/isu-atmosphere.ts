@@ -23,6 +23,10 @@ export const NIGHT_SKY: Rgb = [0.0018, 0.005, 0.013];
 
 const VIEWER: Point = [0, PLANET_RADIUS + VIEW_HEIGHT, 0];
 const airglow = (up: number) => 1 + 2 * Math.pow(1 - Math.max(up, 0), 6);
+const smoothstep = (low: number, high: number, value: number) => {
+  const t = Math.min(1, Math.max(0, (value - low) / (high - low)));
+  return t * t * (3 - 2 * t);
+};
 
 function unit(direction: Direction): Point {
   const length = Math.hypot(direction.x, direction.y, direction.z) || 1;
@@ -114,9 +118,21 @@ export function skyRadiance(
       through[channel] *= stepThrough;
     }
   }
-  return radiance.map(
+  const sky = radiance.map(
     (value, channel) =>
       value * SUN_INTENSITY + NIGHT_SKY[channel] * airglow(view[1]),
+  ) as Rgb;
+  const twilight =
+    smoothstep(-0.22, -0.05, light[1]) *
+    (1 - smoothstep(-0.02, 0.04, light[1]));
+  const gray = luminance(sky);
+  const horizonFill =
+    twilight * (1 + 1.2 * Math.pow(1 - Math.max(view[1], 0), 4));
+  return sky.map(
+    (value, channel) =>
+      value * (1 - twilight * 0.65) +
+      gray * [0.84, 0.96, 1.09][channel] * twilight * 0.65 +
+      [0.012, 0.02, 0.033][channel] * horizonFill,
   ) as Rgb;
 }
 
@@ -184,6 +200,11 @@ vec3 atmosphereRadiance(vec3 direction, vec3 sun) {
     light += through * (scattered - scattered * stepThrough) / max(extinction, vec3(1e-7));
     through *= stepThrough;
   }
-  return light * SUN_INTENSITY + NIGHT_SKY * (1. + 2. * pow(1. - max(direction.y, 0.), 6.));
+  vec3 sky = light * SUN_INTENSITY + NIGHT_SKY * (1. + 2. * pow(1. - max(direction.y, 0.), 6.));
+  float twilight = smoothstep(-.22, -.05, sun.y) * (1. - smoothstep(-.02, .04, sun.y));
+  float gray = dot(sky, vec3(.2126, .7152, .0722));
+  float horizonFill = twilight * (1. + 1.2 * pow(1. - max(direction.y, 0.), 4.));
+  return mix(sky, gray * vec3(.84, .96, 1.09), twilight * .65)
+    + vec3(.012, .02, .033) * horizonFill;
 }
 `;

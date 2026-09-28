@@ -2,8 +2,8 @@ import * as THREE from "three";
 import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 
 // 포인터 물결: ISU 앞쪽 수면의 작은 파동 방정식. R=높이, G=속도. 한 텍셀은 36 / 256 = 0.14 단위다.
-// 카메라(z 11.8)가 보는 앞쪽 수면을 덮도록 z 쪽으로 치우쳐 둔다.
-export const RIPPLE_AREA = { x: -16, z: -28, size: 36 };
+// 카메라(z 11.8) 앞의 모바일 하단 수면도 감쇠 띠 밖에 둔다.
+export const RIPPLE_AREA = { x: -16, z: -22, size: 36 };
 export const RIPPLE_SIZE = 256;
 const STEP_SECONDS = 1 / 60;
 const MAX_STEPS = 3;
@@ -69,6 +69,7 @@ export function createIsuRipples() {
   ];
   let current = 0;
   let pending = 0;
+  let pendingEnergy = 0;
   let accumulator = 0;
   let energy = 0;
 
@@ -89,13 +90,16 @@ export function createIsuRipples() {
     ) {
       const [ax, az] = toUv(fromX, fromZ);
       const [bx, bz] = toUv(toX, toZ);
-      drop.set(ax, az, bx, bz);
+      if (pending === 0) drop.set(ax, az, bx, bz);
+      else drop.set(drop.x, drop.y, bx, bz);
       pending = Math.min(MAX_PENDING, pending + strength);
-      energy += strength;
+      pendingEnergy += strength;
     },
     update(renderer: THREE.WebGLRenderer, seconds: number) {
       const elapsed = Math.max(0, seconds);
       energy *= Math.exp(-elapsed / ENERGY_SECONDS);
+      energy += pendingEnergy;
+      pendingEnergy = 0;
       accumulator = Math.min(accumulator + elapsed, STEP_SECONDS * MAX_STEPS);
       const previous = renderer.getRenderTarget();
       while (accumulator >= STEP_SECONDS) {
