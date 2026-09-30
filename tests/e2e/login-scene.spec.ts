@@ -1,243 +1,209 @@
-import { expect, test, type Page } from "@playwright/test";
-import { fixturePassword } from "./login";
+import { expect, test } from "@playwright/test";
 
-// 이 파일은 실제 3D 장면을 검증하므로 프로젝트 기본값(축소 모션)을 되돌린다.
-test.use({ reducedMotion: "no-preference" });
-
-const canvas = (page: Page) => page.locator(".loginScene .loginSceneCanvas");
-const hasWebGL2 = (page: Page) =>
-  page.evaluate(() =>
-    Boolean(document.createElement("canvas").getContext("webgl2")),
+test("SSMS login keeps CI slogans and interactive Blender blocks", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (
+      /shader error|WebGLProgram|failed to load.*login-scene/i.test(
+        message.text(),
+      )
+    )
+      errors.push(message.text());
+  });
+  await page.goto("/login");
+  const canvas = page.locator(".loginSceneCanvas");
+  await expect(canvas).toHaveAttribute("data-ready", "true", {
+    timeout: 30_000,
+  });
+  await expect(page.getByRole("heading", { name: "로그인" })).toBeVisible();
+  await expect(page.getByLabel("아이디", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("비밀번호", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "로그인", exact: true }),
+  ).toBeEnabled();
+  await expect(page.locator(".loginSloganChallenge")).toHaveCSS(
+    "color",
+    "rgb(153, 202, 60)",
   );
-const sceneBackground = (page: Page) =>
-  page
-    .locator(".loginScene")
-    .evaluate((element) => getComputedStyle(element).backgroundImage);
-const expectMatchingStill = async (page: Page) => {
-  const material = await canvas(page).getAttribute("data-material");
+  await expect(page.locator(".loginSloganShare")).toHaveCSS(
+    "color",
+    "rgb(0, 143, 212)",
+  );
+  await page.mouse.move(430, 420);
+  await expect(canvas).toHaveAttribute("data-hovered-block", /ISU/);
   await expect
-    .poll(() => sceneBackground(page))
-    .toContain(
-      material === "metal"
-        ? "login-still-metal-desktop.webp"
-        : "login-still-desktop.webp",
-    );
-};
-
-test("the form works while the required block model is still loading", async ({
-  page,
-}) => {
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route("**/models/isu-blocks.glb", async (route) => {
-    await gate;
-    await route.continue();
-  });
-  try {
-    await page.goto("/login", { waitUntil: "domcontentloaded" });
-    await expect(canvas(page)).not.toHaveAttribute("data-ready", "true");
-    await page.getByLabel("아이디").fill("hr-admin");
-    await page.getByLabel("비밀번호").fill(fixturePassword());
-    await page.getByRole("button", { name: "로그인", exact: true }).click();
-    // 모델 응답이 막혀 있어도 폼과 인증은 계속 동작해야 한다.
-    await page.waitForURL("**/employees", { waitUntil: "domcontentloaded" });
-  } finally {
-    release();
-    await page.unrouteAll({ behavior: "ignoreErrors" });
-  }
+    .poll(async () => Number(await canvas.getAttribute("data-block-lift")))
+    .toBeGreaterThan(0.03);
+  await page.getByLabel("아이디", { exact: true }).hover();
+  await expect(canvas).toHaveAttribute("data-hovered-block", "");
+  await expect
+    .poll(async () => Number(await canvas.getAttribute("data-block-lift")))
+    .toBeLessThan(0.002);
+  const resources = await page.evaluate(() =>
+    performance.getEntriesByType("resource").map((entry) => entry.name),
+  );
+  const sceneAssets = resources.filter((url) => url.includes("/login-scene/"));
+  expect(sceneAssets.length).toBeGreaterThan(0);
+  expect(
+    sceneAssets.every((url) => /\/login-scene\/(studio|fonts)\//.test(url)),
+  ).toBe(true);
+  expect(errors).toEqual([]);
 });
 
-test("unavailable WebGL shows the still image and keeps the form", async ({
+test("reduced-motion mobile login keeps the seasonal still and CI text", async ({
   page,
 }) => {
-  await page.addInitScript(() => {
-    const original = HTMLCanvasElement.prototype.getContext;
-    Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
-      configurable: true,
-      value: function (
-        this: HTMLCanvasElement,
-        type: string,
-        ...args: unknown[]
-      ) {
-        return type.includes("webgl")
-          ? null
-          : Reflect.apply(original, this, [type, ...args]);
-      },
-    });
-  });
-  await page.goto("/login");
-  await expect(canvas(page)).toHaveAttribute("data-ready", "false");
-  await expectMatchingStill(page);
-  await expect(page.getByLabel("아이디")).toBeEditable();
-  await expect(
-    page.locator(".loginSloganChallenge .loginSloganLetters"),
-  ).toBeVisible();
-  await expect(
-    page.locator(".loginSloganShare .loginSloganLetters"),
-  ).toBeVisible();
-});
-
-test("reduced motion skips WebGL and shows the still image", async ({
-  page,
-}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/login");
-  await expect(canvas(page)).toHaveAttribute("data-ready", "static");
-  await expectMatchingStill(page);
-  await expect(
-    page.locator(".loginSloganChallenge .loginSloganLetters"),
-  ).toBeVisible();
-  await expect(
-    page.locator(".loginSloganShare .loginSloganLetters"),
-  ).toBeVisible();
+  await page.goto("/login?season=christmas");
+  await expect(page.locator(".loginSceneCanvas")).toHaveAttribute(
+    "data-ready",
+    "static",
+  );
+  const background = await page
+    .locator(".loginScene")
+    .evaluate(
+      (element) => getComputedStyle(element, "::before").backgroundImage,
+    );
+  expect(background).toContain("/studio/still-christmas-mobile.webp");
+  await expect(page.getByRole("heading", { name: "로그인" })).toBeVisible();
+  await expect(page.locator(".loginSloganChallenge")).toHaveCSS(
+    "color",
+    "rgb(153, 202, 60)",
+  );
+  await expect(page.locator(".loginSloganShare")).toHaveCSS(
+    "color",
+    "rgb(0, 143, 212)",
+  );
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  const resources = await page.evaluate(() =>
+    performance.getEntriesByType("resource").map((entry) => entry.name),
+  );
+  expect(resources.some((url) => url.includes("isu-studio.glb"))).toBe(false);
 });
 
-for (const [seed, material, image] of [
-  [0.25, "metal", "login-still-metal-desktop.webp"],
-  [0.75, "glass", "login-still-desktop.webp"],
+test("greeting seasons put a phrase above the cube and other seasons do not", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/login?season=yearend");
+  await expect(page.locator(".loginSceneCanvas")).toHaveAttribute(
+    "data-ready",
+    "true",
+  );
+  await expect(page.locator(".studioPhrase")).toHaveText(/^See you in \d{4}$/);
+  const phrase = (await page.locator(".studioPhrase").boundingBox())!;
+  const frame = (await page.locator(".studioModelFrame").boundingBox())!;
+  const cube = await page.evaluate(() => {
+    const style = getComputedStyle(document.querySelector(".studioPhrase")!);
+    return {
+      left: Number(style.getPropertyValue("--cube-left")),
+      top: Number(style.getPropertyValue("--cube-top")),
+    };
+  });
+  expect(
+    Math.abs(phrase.x - (frame.x + cube.left * frame.width)),
+  ).toBeLessThanOrEqual(1);
+  expect(phrase.y + phrase.height).toBeLessThan(
+    frame.y + cube.top * frame.height,
+  );
+  expect(phrase.y).toBeGreaterThan(0);
+  await page.goto("/login?season=green");
+  await expect(page.locator(".loginSceneCanvas")).toHaveAttribute(
+    "data-ready",
+    "true",
+  );
+  await expect(page.locator(".studioPhrase")).toHaveCount(0);
+});
+
+for (const [width, height] of [
+  [820, 1180],
+  [1024, 768],
+  [1366, 1024],
 ] as const) {
-  test(`a ${material} visit keeps its matching still image`, async ({
+  test(`tall windows keep the seasonal cube and phrase on screen at ${width}x${height}`, async ({
     page,
   }) => {
-    await page.addInitScript((value) => {
-      Math.random = () => value;
-    }, seed);
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.goto("/login");
-    await expect(canvas(page)).toHaveAttribute("data-material", material);
-    await expect(canvas(page)).toHaveAttribute("data-ready", "static");
-    await expect.poll(() => sceneBackground(page)).toContain(image);
-    await page.setViewportSize({ width: 390, height: 844 });
-    await expect
-      .poll(() => sceneBackground(page))
-      .toContain(
-        material === "metal"
-          ? "login-still-metal-mobile.webp"
-          : "login-still-mobile.webp",
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/login?season=newyear");
+    await expect(page.locator(".loginSceneCanvas")).toHaveAttribute(
+      "data-ready",
+      "true",
+    );
+    const { phraseLeft, cubeLeft } = await page.evaluate(() => {
+      const frame = document
+        .querySelector(".studioModelFrame")!
+        .getBoundingClientRect();
+      const phrase = document.querySelector(".studioPhrase")!;
+      const left = Number(
+        getComputedStyle(phrase).getPropertyValue("--cube-left"),
       );
+      return {
+        phraseLeft: phrase.getBoundingClientRect().left,
+        cubeLeft: frame.left + left * frame.width,
+      };
+    });
+    expect(cubeLeft).toBeGreaterThanOrEqual(15);
+    expect(phraseLeft).toBeGreaterThanOrEqual(15);
   });
 }
 
-test("the ISU scene finishes its entrance when WebGL is available", async ({
-  page,
-}) => {
-  test.setTimeout(150_000);
-  await page.setViewportSize({ width: 960, height: 540 });
-  await page.goto("/login");
-  test.skip(
-    !(await hasWebGL2(page)),
-    "이 브라우저에서 WebGL2를 쓸 수 없습니다",
-  );
-  await expect(canvas(page)).toHaveAttribute("data-ready", "true", {
-    timeout: 60_000,
-  });
-  await expect(canvas(page)).toHaveAttribute("data-intro", "complete", {
-    timeout: 90_000,
-  });
-  await expect(canvas(page)).toHaveAttribute("data-preview", "true");
-});
-
-const opacity = (page: Page, selector: string) =>
-  page
-    .locator(selector)
-    .evaluate((element) => getComputedStyle(element).opacity);
-
-test("a static scene keeps both slogans fully visible through sign-in", async ({
-  page,
-}) => {
-  let employeeRequested = false;
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route("**/employees**", async (route) => {
-    employeeRequested = true;
-    await gate;
-    await route.continue();
-  });
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  try {
-    await page.goto("/login");
-    await expect(canvas(page)).toHaveAttribute("data-ready", "static");
-    expect(await opacity(page, ".loginSloganChallenge")).toBe("1");
-    expect(await opacity(page, ".loginSloganShare")).toBe("1");
-    const shareColor = await page
-      .locator(".loginSloganShare")
-      .evaluate((element) => getComputedStyle(element).color);
-    await page.getByLabel("아이디").fill("hr-admin");
-    await page.getByLabel("비밀번호").fill(fixturePassword());
-    await page.getByRole("button", { name: "로그인", exact: true }).click();
-    await expect.poll(() => employeeRequested).toBe(true);
-    expect(await opacity(page, ".loginSloganShare")).toBe("1");
-    await expect(page.locator(".loginSloganShare")).toHaveCSS(
-      "color",
-      shareColor,
+for (const failure of ["model", "webgl"]) {
+  test(`falls back to the seasonal still after ${failure} failure`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    if (failure === "model")
+      await page.route("**/isu-studio.glb", (route) => route.abort());
+    else
+      await page.addInitScript(() => {
+        const original = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function (
+          this: HTMLCanvasElement,
+          type: string,
+          ...args: unknown[]
+        ) {
+          return type.includes("webgl")
+            ? null
+            : Reflect.apply(original, this, [type, ...args]);
+        } as typeof original;
+      });
+    await page.goto("/login?season=autumn");
+    await expect(page.locator(".loginSceneCanvas")).toHaveAttribute(
+      "data-ready",
+      "static",
     );
-  } finally {
-    release();
-    await page.unrouteAll({ behavior: "ignoreErrors" });
-  }
-  await page.waitForURL("**/employees", { timeout: 15_000 });
-});
-
-test("slogan lines and calm survive sign-in", async ({ page }) => {
-  test.setTimeout(150_000);
-  await page.setViewportSize({ width: 960, height: 540 });
-  await page.goto("/login");
-  test.skip(
-    !(await hasWebGL2(page)),
-    "이 브라우저에서 WebGL2를 쓸 수 없습니다",
-  );
-  await expect(canvas(page)).toHaveAttribute("data-intro", "complete", {
-    timeout: 90_000,
+    expect(
+      await page
+        .locator(".loginScene")
+        .evaluate((el) => getComputedStyle(el, "::before").backgroundImage),
+    ).toContain("still-autumn-desktop.webp");
+    await expect(
+      page.getByRole("button", { name: "로그인", exact: true }),
+    ).toBeEnabled();
   });
-  await expect(canvas(page)).toHaveAttribute("data-preview", "true");
-
-  await page.getByLabel("아이디").focus();
-  // 컨테이너의 소프트웨어 렌더링은 초당 1프레임 안팎이라 calm이 차오를 시간을 넉넉히 준다.
-  await expect
-    .poll(async () => Number(await canvas(page).getAttribute("data-calm")), {
-      timeout: 60_000,
-    })
-    .toBeGreaterThan(0.9);
-  const calmStart = Number(await canvas(page).getAttribute("data-day-time"));
-  await page.waitForTimeout(3_000);
-  const calmEnd = Number(await canvas(page).getAttribute("data-day-time"));
-  expect((calmEnd - calmStart + 120) % 120).toBeLessThan(0.4);
-
-  await page.getByLabel("아이디").fill("hr-admin");
-  await page.getByLabel("비밀번호").fill(fixturePassword());
-  await page.getByRole("button", { name: "로그인", exact: true }).click();
-  await page.waitForURL("**/employees", { timeout: 15_000 });
-});
-
-test("a missing block model falls back to the still image", async ({
+}
+test("middle click previews seasons without changing the form", async ({
   page,
 }) => {
-  await page.route("**/models/isu-blocks.glb", (route) => route.abort());
-  await page.goto("/login");
-  await expect(canvas(page)).toHaveAttribute("data-ready", "false", {
-    timeout: 30_000,
-  });
-  await expectMatchingStill(page);
-  await expect(page.getByLabel("아이디")).toBeEditable();
-  await expect(
-    page.locator(".loginSloganChallenge .loginSloganLetters"),
-  ).toBeVisible();
-});
-
-test("a missing water normal map falls back to the still image", async ({
-  page,
-}) => {
-  await page.route("**/images/login/water-normal.webp", (route) =>
-    route.abort(),
+  await page.goto("/login?season=autumn");
+  await page.getByLabel("아이디", { exact: true }).fill("test-user");
+  await page.mouse.click(20, 20, { button: "middle" });
+  expect(
+    await page
+      .locator(".loginScene")
+      .evaluate((el) => getComputedStyle(el, "::before").backgroundImage),
+  ).toContain("still-christmas-desktop.webp");
+  await expect(page.getByLabel("아이디", { exact: true })).toHaveValue(
+    "test-user",
   );
-  await page.goto("/login");
-  await expect(canvas(page)).toHaveAttribute("data-ready", "false", {
-    timeout: 30_000,
-  });
-  await expectMatchingStill(page);
-  await expect(page.getByLabel("아이디")).toBeEditable();
 });

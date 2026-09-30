@@ -1,5 +1,5 @@
 :root:has(.loginPage) {
-  --color-scrollbar-track: var(--color-login-sky-bottom);
+  --color-scrollbar-track: #eef2f3;
 }
 
 .loginPage {
@@ -19,32 +19,72 @@
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(
-    var(--color-login-sky-top),
-    var(--color-login-sky-bottom)
+  overflow: hidden;
+  container-type: size;
+}
+
+/* 배경(cover)은 PC에서 33% 지점을 자르되, 세로로 긴 창(태블릿 등)에서도 계절 큐브가 왼쪽 16px 안에 남도록
+   이동을 제한한다. studio-frame.ts의 studioFrame과 같은 식이라 정지 화면과 3D 로고 자리가 맞는다. */
+.loginScene::before {
+  --login-bg-width: max(100cqw, 100cqh * var(--login-bg-ratio));
+  position: absolute;
+  inset: 0;
+  background: var(--login-still-desktop) center / cover no-repeat;
+  background-position-x: calc(
+    -1 *
+      min(
+        0.33 * (var(--login-bg-width) - 100cqw),
+        max(0px, var(--login-bg-width) * var(--login-cube-x) - 16px)
+      )
   );
+  content: "";
 }
 
-.loginScene:has(canvas[data-ready="false"]),
-.loginScene:has(canvas[data-ready="static"]) {
-  background: var(--color-login-sky-top)
-    url("/images/login/login-still-desktop.webp") center / cover no-repeat;
+.loginScene:has(canvas[data-ready="true"])::before {
+  background-image: url("/login-scene/studio/background-desktop.webp");
 }
 
-.loginScene:has(canvas[data-material="metal"][data-ready="false"]),
-.loginScene:has(canvas[data-material="metal"][data-ready="static"]) {
-  background-image: url("/images/login/login-still-metal-desktop.webp");
+.studioModelFrame {
+  position: absolute;
+  pointer-events: none;
+  container-type: inline-size;
+}
+
+/* 1월, 연말 인사말: 큐브 윗면 왼쪽 끝에서 큐브 폭의 30%만큼 띄운다. 위치는 studio-framing.json의 cube 비율. */
+.studioPhrase {
+  position: absolute;
+  left: calc(var(--cube-left) * 100%);
+  bottom: calc((1 - var(--cube-top)) * 100% + var(--cube-width) * 30cqi);
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: 3.2cqi;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
 .loginSceneCanvas {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   opacity: 0;
-  transition: opacity 400ms ease;
 }
 
-.loginSceneCanvas[data-preview="true"] {
+.loginSceneCanvas[data-ready="true"] {
+  opacity: 1;
+}
+
+.studioShadow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+}
+
+.loginScene:has(canvas[data-ready="true"]) .studioShadow {
   opacity: 1;
 }
 
@@ -231,7 +271,7 @@
     align-items: stretch;
     gap: var(--space-4);
     padding: var(--space-4);
-    background: var(--color-login-sky-top);
+    background: #eef2f3;
   }
 
   .loginScene {
@@ -256,14 +296,11 @@
     padding: var(--space-6) var(--space-4);
   }
 
-  .loginScene:has(canvas[data-ready="false"]),
-  .loginScene:has(canvas[data-ready="static"]) {
-    background-image: url("/images/login/login-still-mobile.webp");
-    background-position: center top;
+  .loginScene::before {
+    background-image: var(--login-still-mobile);
+    background-position: center;
   }
-
-  .loginScene:has(canvas[data-material="metal"][data-ready="false"]),
-  .loginScene:has(canvas[data-material="metal"][data-ready="static"]) {
-    background-image: url("/images/login/login-still-metal-mobile.webp");
+  .loginScene:has(canvas[data-ready="true"])::before {
+    background-image: url("/login-scene/studio/background-mobile.webp");
   }
 }

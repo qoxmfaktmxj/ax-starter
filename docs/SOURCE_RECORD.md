@@ -161,3 +161,13 @@ NFS와 SMB는 각각 검증한 조합만 지원한다. 실제 파일을 받기 �
 ## 8. 현재 확인 한계
 
 이번 작업은 네 문서 통합, 디자인 저장소 pull/소스/로컬 자산 검토, 주요 공식 자료 확인, 계획 검토까지다. 패키지 채택/설치, 실제 OIDC/DB/Job 실행, 운영 보안, 라이선스 출고 승인, 법률 검토가 완료된 것은 아니다. 금지 기호/문서 링크/원본 해시/계획의 일관성은 문서 검증으로 확인한다.
+
+## 9. 2026-10-01 jarvis ISU 스튜디오 배경 출처
+
+사용자 요청에 따라 로그인 배경을 `C:/Users/kms/Desktop/dev/jarvis-gitlab/jarvis`의 `origin/main`과 같은 ISU 스튜디오 장면으로 교체한다. 고정 기준 커밋은 `1cb73ddf10f29c2e81c40662f6a56286feda0c33`, 스튜디오 장면 최초 도입 커밋은 `f8f2af97ffcb4b95ef87b28492208e967e20835e`다. 참조 소스 추출본은 `output/jarvis-login-reference/`에 보존한다.
+
+- `apps/web/app/login/`의 `studio-scene.ts`, `studio-frame.ts`, `studio-framing.json`, `login-season.ts`, `login-seasons.json`, `LoginScene.tsx`는 고정 참조의 장면, 카메라 배치, 계절 선택, 정지 이미지 전환을 이식한 파일이다. 입력 영역 포인터 제외 selector는 이 저장소의 `.loginPanel`로 변경했다.
+- `apps/web/public/login-scene/studio/`에는 원본 GLB, 데스크톱/모바일 배경, 그림자, 계절별 정지 이미지 자산을 그대로 이식한다. 기존 `/fonts/Geist` 로컬 폰트를 유지한다.
+- 원본 인증 구현은 이식하지 않는다. 이 저장소의 Better Auth 비밀번호 로그인과 SSO 경로를 유지하고 배경 및 화면 배치만 교체한다.
+- 기존 수면/하늘 장면, 구형 GLB와 텍스처, Draco 자산, 장면 생성 스크립트, 교체된 장면 전용 테스트는 사용하지 않는 구현으로 제거한다. 과거 검증 증거인 `output/` 파일과 작업 기록 문서는 보존한다.
+- 루트 `DESIGN.md` 부재는 기존 문서 drift로 기록한다. 이번 요청은 고정 참조 배경 이식이므로 전체 디자인 시스템 문서나 토큰을 새로 정의하지 않는다.

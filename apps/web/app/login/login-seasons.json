@@ -1,0 +1,21 @@
+{
+  "newyear": {
+    "cube": "ice",
+    "decorations": ["snow"],
+    "phrase": "Happy New Year"
+  },
+  "ice": { "cube": "ice", "decorations": [] },
+  "blossom": { "cube": [255, 183, 197], "decorations": [] },
+  "green": { "cube": [153, 202, 60], "decorations": [] },
+  "summer": { "cube": [255, 201, 60], "decorations": [] },
+  "autumn": {
+    "cube": { "bottom": [236, 142, 42], "top": [192, 44, 30] },
+    "decorations": []
+  },
+  "christmas": { "cube": "ice", "decorations": ["ribbon"] },
+  "yearend": {
+    "cube": "ice",
+    "decorations": ["snow"],
+    "phrase": "See you in {nextYear}"
+  }
+}

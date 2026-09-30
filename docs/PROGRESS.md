@@ -440,3 +440,16 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - 새 GLB와 데스크톱/모바일 법선, 디테일, 거칠기 지도를 적용했다. [수정 전](../output/block-polish-20260928/before-noon-1039.png), [수정 후](../output/block-polish-20260928/after-noon.png)를 비교했다. 금속/유리 각각 데스크톱과 모바일 황혼 정지 이미지를 다시 캡처해 교체했고, 생성 정보와 SHA-256을 `provenance.json`에 기록했다. S를 구성하는 별도 블록 사이의 얇은 틈은 남는다.
 - 모바일 배치 검사는 방문별 랜덤 재질 중 어두운 유리가 선택되면 금속에 맞춘 파랑 픽셀 기준에서 실패했다. 해당 배치 검사를 `material=metal`로 고정해 다시 실행했다: 1개 통과. 프로덕션 서버에서 장면, 재질별 정지 이미지, 모바일 배치, 터치 동작 등 관련 Playwright 7개가 통과했다.
 - `pnpm check`: exit 0, 경계 70개 소스. `pnpm test`: exit 0, 9개 파일 40개. 첫 `pnpm build`는 `APP_PROFILE`이 없어 fixture OIDC 보호 검사에서 실패했다. `APP_PROFILE=local`로 다시 실행한 `pnpm build`는 exit 0이며 기존 파일 추적 경고 9건은 남았다. `pnpm exec next start apps/web -p 3000`에서 로그인, GLB, 법선/거칠기 지도, 모바일 정지 이미지 HEAD 요청이 모두 HTTP 200이었다. Impeccable detector는 지적 사항이 없었다. RTX 4060 Laptop GPU, 1440x900, 60Hz에서 금속 301프레임/5.012초, 유리 302프레임/5.017초를 관측했다. Docker 전체 e2e와 실제 모바일 기기 성능은 검사하지 않았다.
+
+## 2026-10-01 jarvis main ISU 스튜디오 배경 교체
+
+성공 기준은 jarvis 최신 main의 스튜디오 배경과 로고, 계절 큐브, 포인터 동작, 모바일 및 정지 화면 대체를 동일하게 이식하고 기존 배경 전용 코드와 자산을 제거한 뒤 검증하여 main에 푸시하는 것이다. 로그인 인증은 기존 Better Auth를 유지한다.
+
+- 참조 저장소에서 `git fetch origin` 뒤 원격 main `1cb73ddf10f29c2e81c40662f6a56286feda0c33`을 `git archive origin/main`으로 추출했다. 로컬 main은 `f8f2af97`이며 원격에 추가된 휠 클릭 계절 미리보기를 함께 이식했다. 참조 작업 트리는 별도 작업의 변경이 있어 수정하지 않았다.
+- 원본 스튜디오 GLB, 배경, 그림자, 계절별 정지 이미지의 SHA-256이 참조 자산과 일치함을 확인했다. 새틴 세라믹 재질과 카메라, 호버, 계절 큐브를 동일하게 가져오고 입력 영역 selector만 현재 폼에 맞췄다. 계절은 동적 서버 page에서 한국 시간으로 결정해 빌드 날짜 고정과 hydration 불일치를 피한다.
+- 기존 수면, 대기, 낮밤 주기, 금속/유리 랜덤, 구형 모델과 텍스처, Draco, 전용 생성/캡처 스크립트와 전용 검사를 삭제했다. 과거 작업 기록과 output 증거, 사용자 미추적 PNG는 보존했다. `docs/DEPENDENCIES.md`, `docs/SOURCE_RECORD.md`에 현재 경로와 출처를 반영했다.
+- 최종 `pnpm check`: exit 0, 포맷, lint, 타입, 아키텍처 59개 소스 통과. [검사 로그](../output/jarvis-studio-check.log). `pnpm test`: exit 0, 6개 파일 41개 통과. [단위 로그](../output/jarvis-studio-unit.log).
+- 최초 `pnpm build`는 APP_PROFILE 미설정으로 fixture 제한에 걸려 실패했다. `$env:APP_PROFILE='local'; pnpm build`는 최종 exit 0이며 /login은 동적 렌더링이다. 기존 파일 trace 경고 9건은 남았다. [빌드 로그](../output/jarvis-studio-build.log).
+- `pnpm exec playwright test tests/e2e/login-scene.spec.ts --config output/playwright/host.config.ts`: 최종 9개 통과, 실패/skip 0, 29.1초. 로고 호버, 모바일 모션 감소, 인사말, 세 가지 화면 비율, 모델/WebGL 실패 대체, 휠 클릭 전환을 확인했다. [브라우저 로그](../output/jarvis-studio-e2e.log). 실제 DB 인증 및 전체 업무 e2e, Docker/P1 검사는 실행하지 않았다.
+- [데스크톱](../output/playwright/jarvis-studio-desktop.png), [모바일](../output/playwright/jarvis-studio-mobile.png) 캡처를 직접 확인했다. Impeccable detector는 기존 로그인 오류 상자의 3px border-left 한 건을 지적했다. 요청 범위 밖 기존 인증 오류 스타일이라 유지했다. 최종 독립 검토는 삭제 경로 문서 및 날짜 처리 수정이 모두 resolved이고 disposition ship이었다.
+- `git diff --check` 및 변경 소스/문서의 금지 문자 검사를 통과했다. 작업 전 HEAD와 origin/main은 `70531678`로 같아 기존 main과 충돌이 없었다. 개발 서버 생성 AGENTS.md/CLAUDE.md를 제거하고 next-env.d.ts를 복원했다.

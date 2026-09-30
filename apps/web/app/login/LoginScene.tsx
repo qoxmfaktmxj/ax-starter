@@ -1,225 +1,139 @@
 "use client";
 
-import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
-import type {
-  BlockMaterialVariant,
-  createIsuWaterScene,
-} from "./isu-water-scene";
+import { type CSSProperties, useEffect, useRef } from "react";
+import Image from "next/image";
+import type { createStudioScene } from "./studio-scene";
+import type { LoginSeason } from "./login-season";
+import { CUBE_X, studioFrame } from "./studio-frame";
+import framing from "./studio-framing.json";
 
-type IsuScene = Awaited<ReturnType<typeof createIsuWaterScene>>;
-type ReadyState = "loading" | "false" | "static";
+type StudioScene = Awaited<ReturnType<typeof createStudioScene>>;
 
-export type LoginSceneHandle = {
-  calm(on: boolean): void;
-  shake(): void;
-  share(): Promise<void>;
-};
-
-// 랜딩 HeroScene.tsx의 수명 주기를 가져왔다. 모션 감소 설정이면 WebGL을 시작하지 않고 정지 이미지를 쓴다.
-export default function LoginScene({ ref }: { ref?: Ref<LoginSceneHandle> }) {
+export default function LoginScene({
+  season,
+  phrase,
+}: {
+  season: LoginSeason;
+  phrase: string | null;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sceneRef = useRef<IsuScene | null>(null);
-  const materialRef = useRef<BlockMaterialVariant | null>(null);
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      calm: (on) => sceneRef.current?.calm(on),
-      shake: () => sceneRef.current?.shake(),
-      share: () => sceneRef.current?.share() ?? Promise.resolve(),
-    }),
-    [],
-  );
 
   useEffect(() => {
+    const root = rootRef.current;
+    const frame = frameRef.current;
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    if (!materialRef.current) {
-      const requested = new URLSearchParams(window.location.search).get(
-        "material",
-      );
-      materialRef.current =
-        requested === "metal" || requested === "glass"
-          ? requested
-          : Math.random() < 0.5
-            ? "metal"
-            : "glass";
-    }
-    const material = materialRef.current;
-    canvas.dataset.material = material;
-    const setState = (ready: ReadyState) => {
-      canvas.dataset.ready = ready;
-      canvas.dataset.preview = "false";
+    if (!root || !frame || !canvas) return;
+    let scene: StudioScene | null = null;
+    // 로고 프레임(그림자, 문구, 3D 카메라)을 정지 화면과 같은 자리에 둔다.
+    const place = () => {
+      const rect = root.getBoundingClientRect();
+      const box = studioFrame(rect, window.innerWidth < 768);
+      Object.assign(frame.style, {
+        left: `${box.left}px`,
+        top: `${box.top}px`,
+        width: `${box.width}px`,
+        height: `${box.height}px`,
+      });
+      scene?.resize(rect, box);
     };
+    place();
+    const resize = new ResizeObserver(place);
+    resize.observe(root);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (reduced.matches) {
-      setState("static");
-      return;
+      canvas.dataset.ready = "static";
+      return () => resize.disconnect();
     }
-    setState("loading");
     const initialization = new AbortController();
-    let disposed = false;
-    let lost = false;
-    let frame = 0;
-    let time = 0;
-    let previous = 0;
-    let assetsReady = false;
     let touchRelease = 0;
-    const stop = () => {
-      cancelAnimationFrame(frame);
-      frame = 0;
-    };
-    const release = (ready: "false" | "static") => {
-      stop();
-      window.clearTimeout(touchRelease);
-      sceneRef.current?.dispose();
-      sceneRef.current = null;
-      setState(ready);
-    };
-    const draw = (delta: number, wallDelta = delta) => {
-      const scene = sceneRef.current;
-      if (!scene) return false;
-      try {
-        scene.render(time, delta, assetsReady, wallDelta);
-        return true;
-      } catch {
-        release("false");
-        return false;
-      }
-    };
-    const tick = (now: number) => {
-      frame = 0;
-      if (!sceneRef.current || !assetsReady || lost || document.hidden) return;
-      const wallDelta = previous
-        ? Math.max(0, (now - previous) / 1000)
-        : 1 / 60;
-      const delta = Math.min(wallDelta, 0.06);
-      previous = now;
-      time += delta;
-      if (draw(delta, wallDelta)) frame = requestAnimationFrame(tick);
-    };
-    const sync = () => {
-      stop();
-      previous = 0;
-      if (!sceneRef.current || lost || document.hidden) return;
-      if (draw(0) && assetsReady) frame = requestAnimationFrame(tick);
-    };
-    const onPointer = (event: PointerEvent) => {
-      const scene = sceneRef.current;
-      if (!event.isPrimary || !scene || !assetsReady || lost) return;
-      window.clearTimeout(touchRelease);
+    const pointer = (event: PointerEvent) => {
+      if (!event.isPrimary || !scene) return;
       const target = event.target as Element | null;
-      if (target?.closest?.(".loginPanel, a, button, input")) {
-        scene.pointerLeave();
+      if (target?.closest(".loginPanel, a, button, input, label")) {
+        scene.leave();
         return;
       }
-      const rect = canvas.getBoundingClientRect();
-      scene.pointer(
-        ((event.clientX - rect.left) / rect.width) * 2 - 1,
-        1 - ((event.clientY - rect.top) / rect.height) * 2,
-      );
-      if (event.type === "pointerdown" && event.pointerType !== "mouse")
-        draw(0.06, 0);
+      window.clearTimeout(touchRelease);
+      scene.pointer(event.clientX, event.clientY, event.type === "pointerdown");
+      if (event.pointerType !== "mouse")
+        touchRelease = window.setTimeout(() => scene?.leave(), 900);
     };
     const leave = (event: PointerEvent) => {
-      if (
-        event.type === "pointerout" &&
-        (event.relatedTarget || event.pointerType !== "mouse")
-      )
-        return;
-      if (event.type === "pointerup" && event.pointerType === "mouse") return;
-      window.clearTimeout(touchRelease);
-      if (event.pointerType === "mouse") sceneRef.current?.pointerLeave();
-      else
-        touchRelease = window.setTimeout(
-          () => sceneRef.current?.pointerLeave(),
-          900,
-        );
+      if (!event.relatedTarget) scene?.leave();
     };
     const onReducedChange = () => {
-      if (reduced.matches) release("static");
+      if (!reduced.matches) return;
+      initialization.abort();
+      scene?.dispose();
+      scene = null;
+      canvas.dataset.ready = "static";
     };
-    const lostContext = (event: Event) => {
-      event.preventDefault();
-      lost = true;
-      stop();
-      sceneRef.current?.pointerLeave();
-      setState("false");
-    };
-    const restoredContext = () => {
-      lost = false;
-      sync();
-    };
-    const resizeObserver = new ResizeObserver(() => {
-      sceneRef.current?.resize();
-      sync();
-    });
-    resizeObserver.observe(canvas);
-    window.addEventListener("pointerdown", onPointer, { passive: true });
-    window.addEventListener("pointermove", onPointer, { passive: true });
-    window.addEventListener("pointerout", leave, { passive: true });
-    window.addEventListener("pointerup", leave, { passive: true });
-    window.addEventListener("pointercancel", leave, { passive: true });
-    document.addEventListener("visibilitychange", sync);
+    window.addEventListener("pointermove", pointer, { passive: true });
+    window.addEventListener("pointerdown", pointer, { passive: true });
+    window.addEventListener("pointerout", leave);
     reduced.addEventListener("change", onReducedChange);
-    canvas.addEventListener("webglcontextlost", lostContext);
-    canvas.addEventListener("webglcontextrestored", restoredContext);
-    import("./isu-water-scene")
+    import("./studio-scene")
       .then((module) =>
-        module.createIsuWaterScene(canvas, initialization.signal, material),
+        module.createStudioScene(canvas, initialization.signal, season),
       )
-      .then((result) => {
-        if (disposed) {
-          result.dispose();
+      .then((loaded) => {
+        if (initialization.signal.aborted) {
+          loaded.dispose();
           return;
         }
-        sceneRef.current = result;
-        result.texturesReady
-          .then((loaded) => {
-            if (disposed || sceneRef.current !== result) return;
-            if (!loaded) {
-              release("false");
-              return;
-            }
-            assetsReady = true;
-            sync();
-          })
-          .catch(() => {
-            if (!disposed && sceneRef.current === result) release("false");
-          });
-        sync();
+        scene = loaded;
+        place();
       })
       .catch(() => {
-        if (!disposed) setState("false");
+        if (!initialization.signal.aborted) canvas.dataset.ready = "static";
       });
     return () => {
-      disposed = true;
       initialization.abort();
-      stop();
+      scene?.dispose();
       window.clearTimeout(touchRelease);
-      resizeObserver.disconnect();
-      window.removeEventListener("pointerdown", onPointer);
-      window.removeEventListener("pointermove", onPointer);
+      resize.disconnect();
+      window.removeEventListener("pointermove", pointer);
+      window.removeEventListener("pointerdown", pointer);
       window.removeEventListener("pointerout", leave);
-      window.removeEventListener("pointerup", leave);
-      window.removeEventListener("pointercancel", leave);
-      document.removeEventListener("visibilitychange", sync);
       reduced.removeEventListener("change", onReducedChange);
-      canvas.removeEventListener("webglcontextlost", lostContext);
-      canvas.removeEventListener("webglcontextrestored", restoredContext);
-      sceneRef.current?.dispose();
-      sceneRef.current = null;
-      setState("false");
     };
-  }, []);
+  }, [season]);
+
+  const stills = {
+    "--login-bg-ratio": framing.desktop.width / framing.desktop.height,
+    "--login-cube-x": CUBE_X,
+    "--login-still-desktop": `url("/login-scene/studio/still-${season}-desktop.webp")`,
+    "--login-still-mobile": `url("/login-scene/studio/still-${season}-mobile.webp")`,
+  } as CSSProperties;
+  const cube = {
+    "--cube-left": framing.cube.left,
+    "--cube-top": framing.cube.top,
+    "--cube-width": framing.cube.width,
+  } as CSSProperties;
 
   return (
-    <div className="loginScene" aria-hidden="true">
+    <div ref={rootRef} className="loginScene" style={stills} aria-hidden="true">
+      <div ref={frameRef} className="studioModelFrame">
+        <Image
+          className="studioShadow"
+          src="/login-scene/studio/shadow.webp"
+          alt=""
+          width={1800}
+          height={1200}
+          unoptimized
+        />
+        {phrase && (
+          <span className="studioPhrase" style={cube}>
+            {phrase}
+          </span>
+        )}
+      </div>
       <canvas
         ref={canvasRef}
         className="loginSceneCanvas"
         data-ready="loading"
-        data-preview="false"
       />
     </div>
   );
