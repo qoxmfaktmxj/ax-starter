@@ -9,6 +9,7 @@ import {
   type CellMouseOverEvent,
   type GridApi,
   type IDatasource,
+  type ICellRendererParams,
 } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
 import {
@@ -62,8 +63,9 @@ function rangeBounds(range: GridRange) {
 
 interface SharedGridProps {
   columns: GridColumn[];
-  onCellChange: (rowId: string, field: string, value: unknown) => void;
-  onSelectedIdsChange: (ids: string[]) => void;
+  label?: string;
+  singleSelection?: boolean;
+  onSelectedIdsChange?: (ids: string[]) => void;
   onEditingChanged?: (editing: boolean) => void;
   commitEditingRef?: RefObject<(() => void) | null>;
   loading?: boolean;
@@ -75,6 +77,9 @@ export interface BrowseGridProps<
   TRow extends { id: string },
 > extends SharedGridProps {
   mode: "browse";
+  pageSize?: number;
+  onQueryPendingChange?: (pending: boolean) => void;
+  onCellChange?: never;
   loadRows: (
     startRow: number,
     endRow: number,
@@ -87,6 +92,7 @@ export interface BatchEditGridProps<
   TRow extends { id: string },
 > extends SharedGridProps {
   mode: "batch-edit";
+  onCellChange: (rowId: string, field: string, value: unknown) => void;
   rows: TRow[];
   loadRows?: never;
   onCellsChange: (changes: GridCellChange[]) => void;
@@ -126,6 +132,15 @@ export function DataGrid<TRow extends { id: string }>(
                   : value === "LEAVE"
                     ? "휴직"
                     : String(value ?? "")
+            : undefined,
+        cellRenderer:
+          column.kind === "status"
+            ? ({ value, valueFormatted }: ICellRendererParams<TRow, string>) =>
+                value ? (
+                  <span className="gridStatus" data-status={value}>
+                    {valueFormatted ?? value}
+                  </span>
+                ) : null
             : undefined,
         cellEditor: column.kind === "status" ? "agSelectCellEditor" : undefined,
         cellEditorParams:
@@ -191,17 +206,21 @@ export function DataGrid<TRow extends { id: string }>(
   );
   const rowSelection = useMemo(
     () => ({
-      mode: "multiRow" as const,
+      mode: props.singleSelection
+        ? ("singleRow" as const)
+        : ("multiRow" as const),
       checkboxes: true,
-      headerCheckbox: false,
+      ...(props.singleSelection ? {} : { headerCheckbox: false }),
       enableClickSelection: false,
     }),
-    [],
+    [props.singleSelection],
   );
   const loadRows = props.mode === "browse" ? props.loadRows : undefined;
 
+  const onQueryPendingChange =
+    props.mode === "browse" ? props.onQueryPendingChange : undefined;
   const onSelectionChanged = useCallback(() => {
-    props.onSelectedIdsChange(
+    props.onSelectedIdsChange?.(
       gridApi?.getSelectedRows().map((row) => row.id) ?? [],
     );
   }, [gridApi, props.onSelectedIdsChange]);
@@ -210,7 +229,7 @@ export function DataGrid<TRow extends { id: string }>(
     (event: { data?: TRow; colDef: { field?: string }; newValue: unknown }) => {
       const field = event.colDef.field;
       if (event.data && field)
-        props.onCellChange(event.data.id, field, event.newValue);
+        props.onCellChange?.(event.data.id, field, event.newValue);
     },
     [props.onCellChange],
   );
@@ -577,19 +596,35 @@ export function DataGrid<TRow extends { id: string }>(
   useEffect(() => {
     if (!loadRows || !gridApi) return;
 
+    let active = true;
+    let pending = 0;
     const datasource: IDatasource = {
       getRows: (request) => {
         const sort = request.sortModel.map(({ colId, sort }) => ({
           field: colId,
           direction: sort,
         }));
+        pending++;
+        onQueryPendingChange?.(true);
         void loadRows(request.startRow, request.endRow, sort)
-          .then(({ rows, total }) => request.successCallback(rows, total))
-          .catch(() => request.failCallback());
+          .then(({ rows, total }) => {
+            if (active) request.successCallback(rows, total);
+          })
+          .catch(() => {
+            if (active) request.failCallback();
+          })
+          .finally(() => {
+            pending--;
+            if (active && pending === 0) onQueryPendingChange?.(false);
+          });
       },
     };
     gridApi.setGridOption("datasource", datasource);
-  }, [gridApi, loadRows]);
+    return () => {
+      active = false;
+      onQueryPendingChange?.(false);
+    };
+  }, [gridApi, loadRows, onQueryPendingChange]);
 
   useEffect(() => {
     if (!gridApi || !props.focusTarget) return;
@@ -617,7 +652,7 @@ export function DataGrid<TRow extends { id: string }>(
   return (
     <div
       className="employeeGrid"
-      aria-label="사원 목록"
+      aria-label={props.label ?? "사원 목록"}
       onCopyCapture={onCopy}
       onPasteCapture={onPaste}
       onKeyDownCapture={onKeyDown}
@@ -629,11 +664,28 @@ export function DataGrid<TRow extends { id: string }>(
         defaultColDef={defaultColDef}
         rowModelType={props.mode === "browse" ? "infinite" : "clientSide"}
         rowData={rowData}
+        pagination={props.mode === "browse" && Boolean(props.pageSize)}
+        paginationPageSize={
+          props.mode === "browse" ? props.pageSize : undefined
+        }
+        paginationPageSizeSelector={false}
+        localeText={{
+          page: "페이지",
+          of: "/",
+          to: "~",
+          firstPage: "첫 페이지",
+          previousPage: "이전 페이지",
+          nextPage: "다음 페이지",
+          lastPage: "마지막 페이지",
+          pageLastRowUnknown: "계산 중",
+          loadingOoo: "조회 중",
+          noRowsToShow: "조회 결과가 없습니다.",
+        }}
         cacheBlockSize={100}
         maxBlocksInCache={5}
         infiniteInitialRowCount={1}
         getRowId={({ data }) => data.id}
-        rowSelection={rowSelection}
+        rowSelection={props.onSelectedIdsChange ? rowSelection : undefined}
         onGridReady={({ api }) => setGridApi(api)}
         onSelectionChanged={onSelectionChanged}
         onCellEditRequest={onCellEditRequest}
@@ -657,7 +709,7 @@ export function DataGrid<TRow extends { id: string }>(
         cellSelection={false}
         suppressClipboardPaste
         loading={props.loading}
-        overlayNoRowsTemplate="<span>표시할 사원이 없습니다.</span>"
+        overlayNoRowsTemplate="<span>조회 결과가 없습니다.</span>"
       />
     </div>
   );

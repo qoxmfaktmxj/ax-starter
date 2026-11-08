@@ -1,0 +1,29 @@
+html:has(.workspaceShell) {
+  --color-canvas: #f5f6fa;
+  --color-surface: #fff;
+  --color-surface-subtle: #fafbfc;
+  --color-text: #364a63;
+  --color-text-on-subtle: #526580;
+  --color-text-muted: #61738a;
+  --color-border: #e3e8ef;
+  --color-border-strong: #cbd4df;
+  --color-control-border: #c3cdda;
+  --color-action: #7151e6;
+  --color-action-hover: #6141cf;
+  --color-action-active: #5133b7;
+  --color-action-text: #fff;
+  --color-link: #6444d5;
+  --work-selection: #f0edff;
+  --work-positive: #127c61;
+  --work-positive-bg: #def6ec;
+  --work-pending: #946116;
+  --work-pending-bg: #fff1ce;
+  --radius-control: 5px;
+  --radius-grid: 0;
+  --control-compact: 32px;
+  --control-regular: 36px;
+  --control-large: 44px;
+  --grid-row-height: 55px;
+  --grid-header-height: 44px;
+  --work-gap: clamp(16px, 2.4vw, 40px);
+}

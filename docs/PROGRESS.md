@@ -453,3 +453,52 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - `pnpm exec playwright test tests/e2e/login-scene.spec.ts --config output/playwright/host.config.ts`: 최종 9개 통과, 실패/skip 0, 29.1초. 로고 호버, 모바일 모션 감소, 인사말, 세 가지 화면 비율, 모델/WebGL 실패 대체, 휠 클릭 전환을 확인했다. [브라우저 로그](../output/jarvis-studio-e2e.log). 실제 DB 인증 및 전체 업무 e2e, Docker/P1 검사는 실행하지 않았다.
 - [데스크톱](../output/playwright/jarvis-studio-desktop.png), [모바일](../output/playwright/jarvis-studio-mobile.png) 캡처를 직접 확인했다. Impeccable detector는 기존 로그인 오류 상자의 3px border-left 한 건을 지적했다. 요청 범위 밖 기존 인증 오류 스타일이라 유지했다. 최종 독립 검토는 삭제 경로 문서 및 날짜 처리 수정이 모두 resolved이고 disposition ship이었다.
 - `git diff --check` 및 변경 소스/문서의 금지 문자 검사를 통과했다. 작업 전 HEAD와 origin/main은 `70531678`로 같아 기존 main과 충돌이 없었다. 개발 서버 생성 AGENTS.md/CLAUDE.md를 제거하고 next-env.d.ts를 복원했다.
+
+## 2026-11-08 사원관리 화면 디자인
+
+성공 기준은 가상 데이터의 조회 조건과 결과 수를 쉽게 읽고, 데스크톱과 모바일에서 행 선택, 편집, 미저장 확인과 저장을 계속 사용할 수 있는 것이다.
+
+- 원격 main의 6c7a7a2에서 시작했다. 사원관리 메뉴 두 개를 상단으로 옮겨 목록을 넓히고, 검색 요약에 적용한 사번, 이름, 조직, 재직 상태를 한글로 표시했다. 일괄편집에서 검색 결과 수도 같은 응답으로 갱신한다. 작은 화면에서는 상세 영역이 목록 아래로 이동한다.
+- corepack pnpm install --frozen-lockfile --prefer-offline 성공. 최초 pnpm 오프라인 설치는 캐시 메타데이터 부족으로 실패했다. 최종 corepack pnpm check 및 corepack pnpm test 성공. 단위 검사 41개, 경계 검사 소스 59개. [정적 검사](../output/employee-design/check.log), [단위 검사](../output/employee-design/unit.log).
+- docker build --target runtime -t ax-employee-workspace:review . 성공. 검사 이미지의 첫 병렬 빌드는 중간 태그 이름 충돌로 실패했다. 최종 runtime 태그와 검사 도구 태그를 분리해 전용 Compose 프로젝트에서 실행했다. auth-and-workspace, batch-save, grid-interactions, password-login 브라우저 검사 19개 통과. 실제 저장, 권한별 목록, 미저장 경고, 복사 및 붙여넣기를 포함한다. [최종 이미지 빌드](../output/employee-design/final-image.log), [브라우저 검사](../output/employee-design/e2e.log).
+- node output/employee-design/visual-qa.cjs 성공. 관리자로 로그인해 24건 조회, 선택 사원의 첨부 영역, 편집 중 사번 검색 1건, 변경 건수와 버리고 이동을 확인했다. 320, 390, 768, 1024, 1280px에서 페이지 가로 넘침을 검사했다. [기존 화면](../output/employee-design/before.png), [데스크톱 선택](../output/employee-design/selected.png), [모바일](../output/employee-design/mobile.png), [편집 중](../output/employee-design/editing.png).
+- Impeccable detect 결과는 빈 목록이다. Hallmark의 첫 정적 검사에서 비활성 버튼 표현을 수정했다. 정적 HTML 사본 검사에서는 폰트 로드와 Grid 포커스 경고가 있어, 검사 도구 사본에 로컬 테스트 로그인 준비만 추가하고 실제 페이지로 다시 실행했다. sloplint --scope app --genre modern-minimal --render 결과 실패 0개, 경고 1개. 조회 버튼과 모드 선택 버튼은 다른 역할이며 선택 모드는 중립색으로 구별한다. [실제 화면 검사](../output/employee-design/hallmark-live.log).
+- 기존 데모의 Web 및 Worker에 같은 최종 이미지를 적용하고 브라우저에서 새 사원 목록을 확인했다. 검사 프로젝트 ax-employee-qa-20261108의 소유 라벨을 확인한 뒤 docker compose down --volumes --remove-orphans로 전용 컨테이너, 네트워크와 볼륨을 정리했다. 참조 컨테이너가 없는 검사 도구와 중간 이미지 태그를 제거했다.
+
+## 2026-11-08 사원명부 디자인 방향 비교
+
+성공 기준은 실제 사원 데이터에서 Hallmark의 디자인 방향을 비교하고, 첫 조회 시 목록 폭을 확보하며, 선택 상세와 일괄편집, 출력 경로를 계속 사용할 수 있는 것이다. 검색과 편집 상태를 데스크톱과 모바일에서 확인한다.
+
+- Hallmark theme.mjs deal에서 Grid, Coral, Studio가 나왔다. UIBOWL에서 클로브 AI의 현금흐름표와 채널톡의 고객 목록을 열어 금액 정렬과 목록 도구 배치를 확인했다. 가상 데이터로 세 안을 비교한 뒤 사용자가 선택한 Studio를 적용했다. [클로브 화면](https://uibowl.io/website/%ED%81%B4%EB%A1%9C%EB%B8%8C%20AI?patterns=%EB%82%B4%EC%97%AD&imgId=cmw0i5g0o0019jv07bz7allf9), [채널톡 화면](https://uibowl.io/website/%EC%B1%84%EB%84%90%ED%86%A1?patterns=%EB%AA%A9%EB%A1%9D%20%28PLP%29&imgId=cmudq4ko40041jx04pjl68ftt).
+- 표 제목은 기기에 설치된 한글 명조, 셀은 기존 로컬 고딕으로 표시한다. 모든 필드를 한 표에서 비교할 수 있게 상세 및 출력 패널은 사원 선택 또는 출력 요청 시에 열린다. [이전 화면](../output/employee-register/previous.png), [Studio 사원명부](../output/employee-register/desktop.png), [모바일](../output/employee-register/mobile.png), [일괄편집](../output/employee-register/editing.png).
+- 첫 Coral 정적 검사는 CSS 서식으로 실패했다. Studio 첫 렌더 검사에서는 검색 필드 경계 대비가 2.92:1이었고 Grid 가상 행과 하단 안내의 겹침이 검출됐다. 필드 경계를 진하게 하고 로컬 환경 안내를 상단으로 이동했다.
+- 320px에서 상단 메뉴 줄바꿈을 확인하고 두 줄의 Grid로 배치했다. 최종 corepack pnpm check 성공, 단위 41개 통과. node output/employee-register/visual-qa.cjs에서 실제 로그인, 사원 24건, 선택 상세, 해당 사번 검색, 초안 폐기와 5가지 화면 폭을 확인했다. [정적 검사](../output/employee-register/check.log), [단위 검사](../output/employee-register/test.log).
+- 로그인 준비를 추가한 Hallmark 검사 사본으로 sloplint --scope app --genre editorial --render 실행. 최종 실제 페이지 검사에서 FAIL 0, REFLEX 0, WARN 0이다. [렌더 검사](../output/employee-register/studio-final-sweep.log).
+- 최종 Studio 이미지의 별도 Compose 환경에서 auth-and-workspace, batch-save, grid-interactions 브라우저 테스트 13개 통과. 별도의 출력 확인에서 선택한 사원이 없는 상태로 Excel을 요청하고 결과 파일을 다운로드했다. 검사 프로젝트 ax-register-qa-20261108의 전용 라벨을 확인한 뒤 down --volumes --remove-orphans로 정리하고 참조 컨테이너가 없는 검사 및 중간 이미지 태그를 제거했다. 로컬 데모의 Web와 Worker는 최종 Studio 이미지를 사용한다. [브라우저 검사](../output/employee-register/studio-e2e-final.log), [Excel 다운로드](../output/employee-register/export-final.log).
+
+## 2026-11-08 DashLite Demo2 사원관리 화면
+
+성공 기준은 사용자가 지정한 Demo2 주문 목록의 아이콘 메뉴, 상단 검색, 제목과 우측 행동, 흰색 표와 상태 표시를 사원관리 데이터에 적용하고 조회, 상세 선택, 편집 저장, 출력과 모바일 배치를 확인하는 것이다.
+
+- UIBOWL의 [DashLite Demo2 주문 목록](https://uibowl.io/website/DashLite%20-%20Demo2?patterns=%EA%B2%80%EC%83%89&patternName=%EC%A3%BC%EB%AC%B8)을 확인했다. 아이콘 메뉴, 상단 이름 검색, 오른쪽 편집 버튼, 흰 목록 패널, 재직 및 휴직 배지를 구현했다. 모바일에서는 메뉴를 상단으로 옮긴다. [데스크톱](../output/employee-dashlite/desktop.png), [모바일](../output/employee-dashlite/mobile.png), [편집](../output/employee-dashlite/editing.png).
+- corepack pnpm check 통과, 단위 41개 통과. docker build --target runtime -t ax-employee-dashlite:local . 성공. 해당 이미지로 기존 로컬 데모 Web과 Worker를 교체했다.
+- node output/employee-dashlite/visual-qa.cjs 첫 실행은 조직 select의 레이블 문자열을 찾지 못해 종료했다. 브라우저 역할과 이름으로 수정해 재실행하고 이름과 조직 조합 검색, 상세, 편집 및 미저장 이동, 5개 뷰포트에서 페이지 폭을 확인했다. [화면 검사](../output/employee-dashlite/visual.log).
+- 별도 ax-dashlite-qa-20261108 프로젝트에서 auth-and-workspace, batch-save, grid-interactions 브라우저 테스트 13개 통과. Excel 생성 및 다운로드 확인. 전용 프로젝트 라벨 확인 후 docker compose down --volumes --remove-orphans로 정리하고 참조 컨테이너가 없는 검사 이미지 태그를 삭제했다. [브라우저 검사](../output/employee-dashlite/e2e.log), [출력 검사](../output/employee-dashlite/export.log).
+
+## 2026-11-08 업무 디자인 시스템
+
+성공 기준은 루트 DESIGN.md와 AGENTS.md가 동일한 공통 코드로 연결되고, 사원관리와 템플릿 화면에서 메뉴 A/B, 1~4개 표, 조회 상태, 저장 및 Excel 상태, 페이지 이동, 권한별 표시를 실제로 확인할 수 있는 것이다.
+
+- 다운로드한 DESIGN-figma.md의 토큰, 컴포넌트, 반응형, 검수 구조와 공개 원문을 참고했다. 루트 DESIGN.md에 실제 코드 경로, A/B 메뉴, 그리드 1~4개, 입력, 읽기, 권한, 저장과 출력 규칙을 작성했다. AGENTS.md와 새 업무 모듈 안내에서 같은 문서로 연결했다. 관리자 역할 부여는 사용자가 요청한 후속 설계 기준으로 기록했다.
+- 사원관리와 예시 화면이 공통 WorkspaceShell, SearchPanel, TextField, ActionButton, GridPanel을 사용한다. 목록 및 선택 행 출력의 ExportActions와 결과 상태 ExportResult를 분리했다. 실제 사원 조회는 20행 단위, 교육 템플릿은 기본 10행이며 상단 메뉴와 좌측 메뉴에서 같은 업무 컴포넌트를 사용한다.
+- corepack pnpm check 성공, 아키텍처 검사 64개 소스. corepack pnpm test 단위 41개 통과. 최종 Compose 도구와 runtime 빌드 성공. [정적 검사](../output/workspace-system/check.log), [단위](../output/workspace-system/unit.log), [빌드](../output/workspace-system/final-build.log).
+- ax-workspace-system-qa-20261108에서 workspace-system, auth-and-workspace, batch-save, grid-interactions Playwright 15개 통과. 지연된 실제 조회의 중복 제출 방지와 페이지 초기화, 기준 행과 하위 표 변경, 조직 담당자 급여 제한을 확인했다. 별도 브라우저 검사에서 Excel 생성 후 다운로드를 확인했다. [E2E](../output/workspace-system/final-e2e.log), [Excel](../output/workspace-system/final-export.log).
+- node output/workspace-system/visual.cjs로 메뉴 A/B와 그리드 1~4개의 8조합, 320px에서 페이지 넘침, 입력 오류와 적용, 20행 단위 두 번째 페이지, 관리자 필드 권한을 확인했다. 첫 폼 검사는 Next 경로 안내와 폼 오류가 모두 alert여서 검사 대상을 해당 폼으로 좁혔다. [검사 로그](../output/workspace-system/final-visual.log), [왼쪽 메뉴와 표 2개](../output/workspace-system/side-2.png), [상단 메뉴와 표 4개](../output/workspace-system/top-4.png), [입력 폼](../output/workspace-system/form.png), [내 권한](../output/workspace-system/rights.png).
+- Python으로 설계 문서 로컬 링크와 금지 문자를 검사하고 git diff --check를 통과했다. 데모 Web와 Worker의 이미지 ID가 같다. 검사 프로젝트의 컨테이너, 네트워크, 두 볼륨 소유를 확인한 뒤 down --volumes --remove-orphans로 정리하고 참조가 없는 검사 도구 태그를 제거했다.
+
+## 2026-11-09 AX Starter 공통 로고
+
+성공 기준은 선택한 사선 A 원본이 왼쪽 메뉴와 상단 메뉴에 표시되고, 넓은 상단 메뉴에서는 AX Starter 이름을 함께 읽을 수 있는 것이다.
+
+- 공통 셸에 사원관리 초기 시안의 사선 A SVG를 복원하고 DESIGN.md에 심볼과 이름의 배치 기준을 추가했다. corepack pnpm check와 Docker runtime 빌드가 통과했다.
+- 로컬 데모 갱신 후 node output/brand-review/verify.cjs로 두 메뉴의 SVG 경로가 원본과 일치함을 확인했다. 데스크톱 상단의 이름 표시와 왼쪽 메뉴 및 모바일의 심볼 단독 표시도 확인했다. [상단 로고](../output/brand-review/final-logo.png).
