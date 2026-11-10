@@ -546,3 +546,13 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - `node output/save-catalog/capture.mjs`에서 버튼 12개 조합의 대비는 최소 4.551:1, 최대 9.510:1이었다. 320px/1440px에서 메뉴 A/B와 기존 템플릿 6종을 확인했다. [측정값](../output/save-catalog/contrast.log), [라이트](../output/save-catalog/코발트-라이트.png), [다크](../output/save-catalog/ISU-다크.png), [모바일](../output/save-catalog/mobile.png)
 - Hallmark 정적 검사는 기존 공통 CSS의 스탬프, 토큰 선언 위치, 간격 등을 지적했다. 렌더 검사에서 발견한 메뉴 배치 선택 상자의 테두리 대비 2.94:1을 수정했다. 로그인 후 캡처한 컴포넌트 DOM과 실제 빌드 CSS로 `sloplint.mjs --url http://127.0.0.1:3185/ --scope app --genre editorial` 실행, FAIL/REFLEX/WARN 각각 0. `copy-lint.mjs` 문구 검사 FAIL/WARN 0. [렌더 검사](../output/save-catalog/hallmark-final.log), [문구 검사](../output/save-catalog/copy-lint.log)
 - 전용 프로젝트 라벨 확인 후 `docker compose -p ax-save-catalog-261110 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 컨테이너 2개, 네트워크, 테스트 DB 볼륨을 제거했다.
+
+## 2026-11-10 사번 입력 필드 상태 기준
+
+성공 기준은 사원관리와 같은 TextField로 기본/포커스/읽기 전용/비활성/오류를 재현하고, 코발트/ISU와 라이트/다크 네 조합에서 실제 조회와 키보드 동작, 오류 연결, 대비를 확인하는 것이다.
+
+- 컴포넌트 탭의 저장 버튼 아래에 사번 검색 예시를 추가했다. 포커스는 실제 키보드 이동으로 표시하고, 검색 한도 20자를 초과한 값을 고치면 오류 문구와 접근성 속성이 함께 해제된다. [입력 필드 기준](../DESIGN.md#입력-필드-기준)
+- 검증 전용 PostgreSQL/OIDC에서 `pnpm migrate`, `pnpm seed` 성공. 첫 `pnpm check`에서 Playwright 검사 인수의 리터럴 타입 추론 오류를 수정한 뒤 재실행해 통과했다. 아키텍처 검사 68개 소스, `pnpm test` 단위 41개 통과. test 프로필 호스트 `pnpm build` 성공. [빌드 로그](../output/field-catalog/build.log)
+- `pnpm exec playwright test --config output/field-catalog/host.config.ts` 전체 44개 통과. 네 조합 각각에서 실제 사번 E001 검색 1건, 기본 입력, 포커스 이동, 읽기 전용 선택/수정 차단, 비활성 Tab 제외, 오류 안내와 수정 후 해제, 320px 가로 넘침을 확인했다. 필드 값/placeholder/오류 문구 대비 4.5:1 이상, 기본/오류 테두리와 포커스 표시 대비 3:1 이상을 확인했다. [브라우저 로그](../output/field-catalog/e2e.log)
+- `node output/field-catalog/capture.mjs`로 테마 4종과 모바일을 캡처했다. `copy-lint.mjs` 문구 검사 FAIL/WARN 0. [코발트 라이트](../output/field-catalog/코발트-라이트.png), [ISU 다크](../output/field-catalog/ISU-다크.png), [모바일](../output/field-catalog/mobile.png)
+- 전용 프로젝트 라벨 확인 후 `docker compose -p ax-field-catalog-261110 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 컨테이너 2개, 네트워크, 테스트 DB 볼륨을 제거했다.

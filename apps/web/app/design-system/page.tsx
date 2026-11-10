@@ -2,6 +2,7 @@
 import { useCallback, useState } from "react";
 import { Tabs } from "@base-ui/react/tabs";
 import { SaveButtonExample } from "./SaveButtonExample";
+import { TextFieldExample } from "./TextFieldExample";
 import { authClient } from "../../auth-client";
 import {
   DataGrid,
@@ -321,6 +322,7 @@ export default function DesignSystemPage() {
         </Tabs.List>
         <Tabs.Panel value="components">
           <SaveButtonExample />
+          <TextFieldExample />
         </Tabs.Panel>
         <Tabs.Panel value="templates">
           <nav className="templateChoices" aria-label="화면 유형">
