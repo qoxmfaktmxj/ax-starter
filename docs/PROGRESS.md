@@ -516,3 +516,4 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 
 - `git merge-tree --write-tree origin/main HEAD` exit 0, 충돌 없음. `pnpm check` 통과, 아키텍처 검사 64개 소스. `pnpm test` 단위 테스트 41개 통과.
 - 선택이 바뀌면 새 상세 응답이 도착할 때까지 이전 사원의 첨부 동작을 숨겼다. 두 번째 사원의 상세 응답을 지연시키는 브라우저 회귀 검사를 추가했다.
+- Docker runtime 빌드는 Debian 패키지 저장소의 TLS 인증서 검증 오류로 실패했다. 격리한 Compose PostgreSQL/OIDC와 호스트 Next 프로덕션 빌드 및 Chrome으로 검증했다. `pnpm migrate`, `pnpm seed`, `pnpm build` 성공. `pnpm exec playwright test --config output/theme-review-261110/host.config.ts workspace-system auth-and-workspace grid-interactions batch-save` 16개 통과.
