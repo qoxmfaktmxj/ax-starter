@@ -313,7 +313,7 @@ body:has(.workspaceShell) {
   text-align: right;
   padding-inline: 8px;
 }
-.workspaceGridArea .gridStatus {
+.gridStatus {
   display: inline-block;
   vertical-align: middle;
   border-radius: 4px;
@@ -322,11 +322,11 @@ body:has(.workspaceShell) {
   font-size: 12px;
   font-weight: 650;
 }
-.workspaceGridArea .gridStatus[data-status="ACTIVE"] {
+.gridStatus[data-status="ACTIVE"] {
   color: var(--work-positive);
   background: var(--work-positive-bg);
 }
-.workspaceGridArea .gridStatus[data-status="LEAVE"] {
+.gridStatus[data-status="LEAVE"] {
   color: var(--work-pending);
   background: var(--work-pending-bg);
 }
@@ -830,7 +830,11 @@ body:has(.workspaceShell) {
 .workReading h2 {
   font-size: 18px;
 }
-.fieldExample {
+.fieldExample,
+.badgeExample {
+  margin-top: var(--space-4);
+}
+.badgeExample table {
   margin-top: var(--space-4);
 }
 .fieldExample h2 + p {

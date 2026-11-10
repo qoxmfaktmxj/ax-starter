@@ -13,6 +13,10 @@ import {
 } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
 import {
+  EmployeeStatusBadge,
+  employeeStatusLabel,
+} from "../ui/workspace/EmployeeStatusBadge";
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -126,21 +130,12 @@ export function DataGrid<TRow extends { id: string }>(
         sortable: props.mode === "browse",
         valueFormatter:
           column.kind === "status"
-            ? ({ value }) =>
-                value === "ACTIVE"
-                  ? "재직"
-                  : value === "LEAVE"
-                    ? "휴직"
-                    : String(value ?? "")
+            ? ({ value }) => employeeStatusLabel(value)
             : undefined,
         cellRenderer:
           column.kind === "status"
-            ? ({ value, valueFormatted }: ICellRendererParams<TRow, string>) =>
-                value ? (
-                  <span className="gridStatus" data-status={value}>
-                    {valueFormatted ?? value}
-                  </span>
-                ) : null
+            ? ({ value }: ICellRendererParams<TRow, string>) =>
+                value ? <EmployeeStatusBadge status={value} /> : null
             : undefined,
         cellEditor: column.kind === "status" ? "agSelectCellEditor" : undefined,
         cellEditorParams:
@@ -287,11 +282,7 @@ export function DataGrid<TRow extends { id: string }>(
             props.columns.find((item) => item.field === field)?.kind ===
             "status"
           )
-            return value === "ACTIVE"
-              ? "재직"
-              : value === "LEAVE"
-                ? "휴직"
-                : String(value ?? "");
+            return employeeStatusLabel(value);
           return String(value ?? "");
         }),
       );

@@ -105,6 +105,17 @@ AX Starter의 공통 심볼은 [WorkspaceShell](packages/ui/workspace/Workspace.
 | 비활성 | 입력을 막고 Tab 이동 순서에서 제외한다. 중립 배경에서도 기존 값을 읽을 수 있다. |
 | 오류 | 입력값을 유지하고 이유와 수정 방법을 필드 아래에 표시한다. `aria-invalid`와 `aria-describedby`로 오류를 연결한다. 예시에서는 사번 검색의 20자 한도를 초과한 값을 수정하면 오류가 해제된다. |
 
+### 사원 상태 배지 기준
+
+사원관리의 상태 열과 디자인 시스템의 컴포넌트 탭은 같은 [EmployeeStatusBadge](packages/ui/workspace/EmployeeStatusBadge.tsx)를 사용한다. 배지는 읽기 전용이며 상태를 한글로 표시한다. 그리드에서 셀을 복사할 때도 같은 문구를 쓴다.
+
+| 상태 코드 | 표시 | 글자색 / 배경색 |
+| --- | --- | --- |
+| ACTIVE | 재직 | `--work-positive` / `--work-positive-bg` |
+| LEAVE | 휴직 | `--work-pending` / `--work-pending-bg` |
+
+코발트/ISU와 라이트/다크 네 조합에서 글자와 배경의 대비는 4.5:1 이상이어야 한다. 같은 테마의 예시와 실제 사원 행에서 상태 문구와 두 색이 일치하는지 확인한다.
+
 ### 그리드 조립 예
 
 여기서 `loadCourses`는 화면의 서비스 API를 호출하고 정렬과 시작/끝 행을 전달한다. `runSearch`는 입력 중인 조건을 적용하고 그리드의 첫 페이지부터 다시 읽는다.

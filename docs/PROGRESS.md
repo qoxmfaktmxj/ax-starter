@@ -556,3 +556,13 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - `pnpm exec playwright test --config output/field-catalog/host.config.ts` 전체 44개 통과. 네 조합 각각에서 실제 사번 E001 검색 1건, 기본 입력, 포커스 이동, 읽기 전용 선택/수정 차단, 비활성 Tab 제외, 오류 안내와 수정 후 해제, 320px 가로 넘침을 확인했다. 필드 값/placeholder/오류 문구 대비 4.5:1 이상, 기본/오류 테두리와 포커스 표시 대비 3:1 이상을 확인했다. [브라우저 로그](../output/field-catalog/e2e.log)
 - `node output/field-catalog/capture.mjs`로 테마 4종과 모바일을 캡처했다. `copy-lint.mjs` 문구 검사 FAIL/WARN 0. [코발트 라이트](../output/field-catalog/코발트-라이트.png), [ISU 다크](../output/field-catalog/ISU-다크.png), [모바일](../output/field-catalog/mobile.png)
 - 전용 프로젝트 라벨 확인 후 `docker compose -p ax-field-catalog-261110 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 컨테이너 2개, 네트워크, 테스트 DB 볼륨을 제거했다.
+
+## 2026-11-10 사원 상태 배지 기준
+
+성공 기준은 디자인 시스템 컴포넌트 탭과 실제 사원관리 그리드가 같은 재직/휴직 배지를 사용하고, 코발트/ISU와 라이트/다크 네 조합에서 글자와 배경의 대비가 4.5:1 이상인지 검증하는 것이다.
+
+- 공통 EmployeeStatusBadge를 그리드와 예시에 연결했다. 상태 코드와 한글 표시는 [사원 상태 배지 기준](../DESIGN.md#사원-상태-배지-기준)에 기록했다.
+- 전용 PostgreSQL/OIDC 환경에서 `pnpm migrate`, `pnpm seed` 성공. 새 테스트 파일의 포맷을 정리한 뒤 `pnpm check` 통과, 아키텍처 검사 69개 소스. `pnpm test` 단위 41개 통과. test 프로필의 호스트 `pnpm build` 성공. [빌드 로그](../output/badge-catalog/build.log)
+- `pnpm exec playwright test --config output/badge-catalog/host.config.ts` 전체 48개 통과. 네 테마에서 조직 담당자가 조회한 E001(재직), E009(휴직)의 상태 문구, 글자색, 배경색을 카탈로그와 대조했다. 코발트와 ISU 각각 라이트에서 재직 4.53:1, 휴직 4.70:1, 다크에서 재직 7.54:1, 휴직 8.16:1이었다. [브라우저 로그](../output/badge-catalog/e2e.log)
+- `node output/badge-catalog/capture.mjs`로 네 테마의 실제 그리드와 카탈로그, 320px 배치를 확인했다. [실제 그리드](../output/badge-catalog/grid-ISU-다크.png), [카탈로그](../output/badge-catalog/코발트-라이트.png), [모바일](../output/badge-catalog/mobile.png)
+- 프로젝트 라벨 확인 후 `docker compose -p ax-badge-catalog-261110 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 전용 컨테이너 2개, 네트워크와 테스트 DB 볼륨을 정리했다.
