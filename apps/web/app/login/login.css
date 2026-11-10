@@ -1,5 +1,5 @@
 :root:has(.loginPage) {
-  --color-scrollbar-track: #eef2f3;
+  --color-scrollbar-track: var(--color-login-canvas);
 }
 
 .loginPage {
@@ -50,12 +50,16 @@
   container-type: inline-size;
 }
 
+:root[data-mode="dark"] .loginScene {
+  filter: brightness(0.55);
+}
+
 /* 1월, 연말 인사말: 큐브 윗면 왼쪽 끝에서 큐브 폭의 30%만큼 띄운다. 위치는 studio-framing.json의 cube 비율. */
 .studioPhrase {
   position: absolute;
   left: calc(var(--cube-left) * 100%);
   bottom: calc((1 - var(--cube-top)) * 100% + var(--cube-width) * 30cqi);
-  color: var(--color-text);
+  color: var(--neutral-ink);
   font-family: var(--font-display);
   font-size: 3.2cqi;
   font-weight: 600;
@@ -251,7 +255,6 @@
   text-align: center;
 }
 
-/* 오류색은 흰 바탕에서만 4.5:1을 넘으므로 흰 상자 안에 둔다. */
 .loginError {
   margin: var(--space-3) 0 0;
   padding: var(--space-2) var(--space-3);
@@ -271,7 +274,7 @@
     align-items: stretch;
     gap: var(--space-4);
     padding: var(--space-4);
-    background: #eef2f3;
+    background: var(--color-login-canvas);
   }
 
   .loginScene {

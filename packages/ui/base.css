@@ -59,7 +59,7 @@ a {
 
 ::selection {
   color: var(--color-text);
-  background: rgb(60 109 238 / 18%);
+  background: color-mix(in srgb, var(--color-action) 24%, var(--color-surface));
 }
 
 /* 12px 영역 가운데 2px 레일, 평소 4px 막대, 잡으면 8px. 색은 역할 토큰을 따른다. */

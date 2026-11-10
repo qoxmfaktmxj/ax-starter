@@ -7,13 +7,12 @@ html:has(.workspaceShell) {
   --color-text-muted: #61738a;
   --color-border: #e3e8ef;
   --color-border-strong: #cbd4df;
-  --color-control-border: #c3cdda;
-  --color-action: #7151e6;
-  --color-action-hover: #6141cf;
-  --color-action-active: #5133b7;
-  --color-action-text: #fff;
-  --color-link: #6444d5;
-  --work-selection: #f0edff;
+  --color-control-border: var(--neutral-control-border);
+  --work-selection: color-mix(
+    in srgb,
+    var(--color-action) 12%,
+    var(--color-surface)
+  );
   --work-positive: #127c61;
   --work-positive-bg: #def6ec;
   --work-pending: #946116;

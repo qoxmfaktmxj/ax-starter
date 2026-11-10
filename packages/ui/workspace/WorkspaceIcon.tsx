@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 
 const paths = {
+  appearance: (
+    <>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" />
+    </>
+  ),
   layout: (
     <>
       <rect x="3" y="4" width="18" height="16" rx="2" />

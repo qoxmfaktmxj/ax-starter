@@ -517,3 +517,13 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - `git merge-tree --write-tree origin/main HEAD` exit 0, 충돌 없음. `pnpm check` 통과, 아키텍처 검사 64개 소스. `pnpm test` 단위 테스트 41개 통과.
 - 선택이 바뀌면 새 상세 응답이 도착할 때까지 이전 사원의 첨부 동작을 숨겼다. 두 번째 사원의 상세 응답을 지연시키는 브라우저 회귀 검사를 추가했다.
 - Docker runtime 빌드는 Debian 패키지 저장소의 TLS 인증서 검증 오류로 실패했다. 격리한 Compose PostgreSQL/OIDC와 호스트 Next 프로덕션 빌드 및 Chrome으로 검증했다. `pnpm migrate`, `pnpm seed`, `pnpm build` 성공. `pnpm exec playwright test --config output/theme-review-261110/host.config.ts workspace-system auth-and-workspace grid-interactions batch-save` 16개 통과.
+
+## 2026-11-10 코발트/ISU와 라이트/다크 전환
+
+성공 기준은 사원 선택과 편집을 유지하면서 네 조합을 적용하고, 새 요청의 최초 HTML과 Grid, 감사, 로그인에도 반영하는 것이다. [테마 설계](superpowers/specs/2026-11-10-appearance.md), [구현 계획](superpowers/plans/2026-11-10-appearance.md).
+
+- `gh pr view 1 --json state,mergeCommit`에서 사원관리 PR 병합과 main 커밋 `15177b4`를 확인했다. 해당 커밋에서 테마 브랜치를 시작했다.
+- `pnpm check` exit 0, 경계 검사 66개 소스. `pnpm test` 단위 41개 통과. test 프로필에서 호스트 `pnpm build` 성공. 루트 레이아웃에서 설정 쿠키를 읽으므로 업무 페이지는 요청마다 렌더링된다. [빌드 로그](../output/theme-review-261110/build.log)
+- 격리한 실제 PostgreSQL/OIDC와 호스트 Chrome으로 `pnpm exec playwright test --config output/theme-review-261110/host.config.ts` 실행, 전체 39개 통과. 네 조합의 표 배경과 버튼/재직/휴직 글자 대비, 쿠키 복원, 320px에서 키보드 전환과 편집값 보존을 확인했다. [브라우저 로그](../output/theme-review-261110/full-e2e.log)
+- `node output/theme-review-261110/capture.mjs`로 [다크 사원관리](../output/theme-review-261110/dark-grid.png), [모바일 설정](../output/theme-review-261110/mobile-settings.png), [모바일 로그인](../output/theme-review-261110/mobile-login.png)을 캡처해 확인했다. `node output/theme-review-261110/edge-cases.mjs`에서 쿠키 저장 제한 안내, 다크 로그인 정지 화면과 WebGL을 확인했다.
+- Docker 이미지 빌드의 Debian TLS 오류는 남아 있다. 전용 프로젝트 라벨을 확인하고 `docker compose -p ax-theme-host-261110 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 컨테이너 2개, 네트워크, 시험 DB 볼륨을 제거했다. P1은 실행하지 않았다.

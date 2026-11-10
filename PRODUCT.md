@@ -46,11 +46,13 @@ web
 | 폐쇄망 고려 | 외부 폰트/CDN/텔레메트리 전송을 기본 비활성화한다 |
 | 코드 출처 | landing-minseok91과 vibe-hr은 사용자 소유다. 코드, 이미지, 3D 장면, 로고를 가져와 쓸 수 있고 가져온 출처는 기록한다. AG Grid Enterprise 혼입 여부만 B4로 확인한다 |
 
-오늘 만들지 않는 것은 급여 계산 엔진, 결재 엔진, 전체 인사 제품, 범용 ACL/플러그인 엔진, 리포트 디자이너, 멀티테넌트, 다국어, Dark Mode(로그인 교체 다음 최우선 과제인 테마 시스템에서 진행), 대규모 Excel 업로드, RAG/MCP/Agent, 중앙 AI Gateway, 실제 외부 LLM 연결, Keycloak, Valkey/BullMQ, 관측 서버 묶음, Kubernetes, 판매용 패키지다.
+오늘 만들지 않는 것은 급여 계산 엔진, 결재 엔진, 전체 인사 제품, 범용 ACL/플러그인 엔진, 리포트 디자이너, 멀티테넌트, 다국어, 대규모 Excel 업로드, RAG/MCP/Agent, 중앙 AI Gateway, 실제 외부 LLM 연결, Keycloak, Valkey/BullMQ, 관측 서버 묶음, Kubernetes, 판매용 패키지다.
 
 ## Brand Commitments
 
 현재 업무 화면의 메뉴, 레이아웃, 컨트롤과 상태 표시는 [AX Starter 디자인 시스템](DESIGN.md)을 따른다. 사원관리와 화면 템플릿에 적용한 구체적인 기준을 이 문서에서 관리한다.
+
+공통 업무 메뉴의 ‘화면 설정’에서 코발트/ISU 브랜드와 라이트/다크 모드를 고른다. 기본값은 코발트/라이트이며 브라우저에 저장한 선택을 다음 로그인에도 적용한다. [테마 설계](docs/superpowers/specs/2026-11-10-appearance.md)
 
 사용자가 지정한 디자인 원본은 최신 `landing-minseok91`과 `vibe-hr` 저장소다. 두 저장소는 사용자 소유이므로 시각 언어, 업무 동작, 코드, 이미지를 가져와 쓸 수 있다. 디자인 근거와 선택지는 [디자인 계획](docs/DESIGN_BRIEF.md)에 보존한다. 2026-09-24 사용자 결정으로 3D 장면, 모션 라이브러리, 브랜드 로고(ISU 포함)를 Starter에서 사용할 수 있다.
 
@@ -75,7 +77,6 @@ web
 
 | 단계 | 남길 요구사항 |
 | --- | --- |
-| ISU 로그인 교체 직후 (최우선) | 테마 시스템 전체: 여러 테마(기본 코발트, ISU), 테마 전환 화면, 다크 모드. [ISU 로그인 설계](docs/superpowers/specs/2026-09-24-isu-login-design.md) 11절 |
 | Reference 다음 | Saved View 버전/권한 복원, 컬럼 설정/컨텍스트 메뉴, 전체 Skill 목록, 교육 신청 두 번째 모듈 |
 | 실제 데이터 전 | 실제 IdP 계정 차단 전파/세션 취소 시험, 악성코드 검사 또는 승인된 대체 통제, NFS/SMB별 검증, NAS 단절 시험, DB/파일 공동 복원, 전송 목록과 관측 수신자 확정 |
 | 회사 플랫폼 전 | B2 자체 코드 권리, B4 AG Grid 자산/출처 감사 |

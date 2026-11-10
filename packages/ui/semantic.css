@@ -33,12 +33,9 @@
   --color-scrollbar-thumb-active: var(--color-action-hover);
   --color-scrollbar-track: var(--color-border);
 
-  --color-login-action: color-mix(in srgb, var(--brand-isu-blue) 80%, black);
-  --color-login-action-hover: color-mix(
-    in srgb,
-    var(--brand-isu-blue) 65%,
-    black
-  );
+  --color-login-action: var(--color-action);
+  --color-login-action-hover: var(--color-action-hover);
+  --color-login-canvas: #eef2f3;
   --color-login-slogan-challenge: var(--brand-isu-green);
   --color-login-slogan-share: var(--brand-isu-blue);
   --color-login-slogan-challenge-sheen: #e0f0c4;
@@ -57,4 +54,52 @@
     transparent
   );
   --color-login-scrim: var(--neutral-scrim);
+  --focus-ring: 0 0 0 3px
+    color-mix(in srgb, var(--color-action) 28%, transparent);
+}
+
+:root[data-theme="isu"] {
+  --color-action: color-mix(in srgb, var(--brand-isu-blue) 77%, black);
+  --color-action-hover: #005d8b;
+  --color-action-active: #004c74;
+  --color-link: var(--color-action-hover);
+}
+
+:root[data-mode="dark"] {
+  color-scheme: dark;
+  --color-canvas: #101721;
+  --color-surface: #192330;
+  --color-surface-subtle: #222f40;
+  --color-text: #e7edf5;
+  --color-text-muted: #adbbcd;
+  --color-text-on-subtle: #cad5e4;
+  --color-border: #384657;
+  --color-border-strong: #526278;
+  --color-control-border: #74869c;
+  --color-action: #9ab5ff;
+  --color-action-hover: #b2c6ff;
+  --color-action-active: #83a4fc;
+  --color-action-text: #111c2a;
+  --color-link: var(--color-action);
+  --color-success: #75ddad;
+  --color-warning: #ffce82;
+  --color-danger: #ff9ba4;
+  --work-positive: var(--color-success);
+  --work-positive-bg: #173a30;
+  --work-pending: var(--color-warning);
+  --work-pending-bg: #43351d;
+  --color-text-login: var(--color-text);
+  --color-login-canvas: var(--color-canvas);
+  --color-login-panel: color-mix(
+    in srgb,
+    var(--color-surface) 96%,
+    transparent
+  );
+  --color-login-panel-border: var(--color-border-strong);
+}
+
+:root[data-theme="isu"][data-mode="dark"] {
+  --color-action: #74caff;
+  --color-action-hover: #a2dcff;
+  --color-action-active: #51baf3;
 }

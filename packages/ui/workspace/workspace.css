@@ -432,6 +432,48 @@ body:has(.workspaceShell) {
   font-size: 20px;
   margin-bottom: 8px;
 }
+.appearanceSettings {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.appearanceSettings h2 {
+  margin-top: 0;
+}
+.appearanceSettings p {
+  margin: 0;
+  color: var(--color-text-on-subtle);
+}
+.appearanceSettings fieldset {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  margin: 20px 0;
+  padding: 0;
+  border: 0;
+}
+.appearanceSettings legend {
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.appearanceSettings label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+.appearanceSettings label:has(:checked) {
+  border-color: var(--color-action);
+  background: var(--work-selection);
+}
+.appearanceSettings input {
+  margin: 0;
+  accent-color: var(--color-action);
+}
 .workspaceModalActions {
   display: flex;
   flex-wrap: wrap;
