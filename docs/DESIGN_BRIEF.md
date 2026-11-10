@@ -70,7 +70,7 @@ Brand base -> semantic -> component의 3단계로 연결한다. `packages/grid/t
 
 입력과 버튼의 경계는 흰 작업면에서 3:1을 확보하는 별도 control border 토큰을 사용한다. 표 구분선과 패널 테두리의 낮은 대비 토큰과 구분한다.
 
-v4 Blue/Lime은 kickoff에서 가설로 내려갔다. 오늘 실제 AI 기능이 없으므로 Lime 배지나 AI 반짝이 아이콘을 억지로 넣지 않는다. 전체 Dark Mode는 테마 시스템 과제에서 함께 다룬다.
+v4 Blue/Lime은 kickoff에서 가설로 내려갔다. 오늘 실제 AI 기능이 없으므로 Lime 배지나 AI 반짝이 아이콘을 억지로 넣지 않는다. 코발트/ISU와 라이트/다크 조합의 현재 기준은 [테마 설계](superpowers/specs/2026-11-10-appearance.md)에 있다.
 
 ## 4. 조작 계약
 

@@ -7,6 +7,7 @@ import {
   type FormHTMLAttributes,
 } from "react";
 import { WorkspaceIcon, type WorkspaceIconName } from "./WorkspaceIcon";
+import { AppearanceSettings } from "./AppearanceSettings";
 import { BRAND_NAME } from "../../core/brand";
 import "./workspace.css";
 
@@ -84,6 +85,7 @@ export function WorkspaceShell({
               <span>{item.label}</span>
             </button>
           ))}
+          <AppearanceSettings />
         </nav>
         {inlineUtility && utility}
         <button
