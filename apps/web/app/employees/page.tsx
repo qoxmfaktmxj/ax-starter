@@ -1,5 +1,6 @@
 "use client";
 
+import ko from "zod/v4/locales/ko.js";
 import {
   useCallback,
   useEffect,
@@ -8,7 +9,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { employeeUpdate } from "../../../../packages/contracts/employees";
+import {
+  employeeUpdate,
+  employeeValues,
+} from "../../../../packages/contracts/employees";
 import type {
   BatchSaveRequest,
   BatchSaveResult,
@@ -63,6 +67,7 @@ const organizations = [
   { id: "11111111-1111-4111-8111-111111111111", name: "가상조직A" },
   { id: "22222222-2222-4222-8222-222222222222", name: "가상조직B" },
 ];
+const fieldValidation = { error: ko().localeError };
 
 const defaultQuery: EmployeeQuery = {
   filters: {},
@@ -181,9 +186,55 @@ export default function EmployeesPage() {
   const [conflicts, setConflicts] = useState<
     { rowId: string; currentVersion: number }[]
   >([]);
-  const [rowErrors, setRowErrors] = useState<
-    { rowKey: string; field?: string; message: string }[]
+  const [reportedErrors, setRowErrors] = useState<
+    { rowKey: string; field?: string; message: string; schemaIssue?: boolean }[]
   >([]);
+  const rowErrors = useMemo(
+    () =>
+      reportedErrors.flatMap((issue) => {
+        if (!issue.field) return [issue];
+        const row = draftRows.find((item) => item.id === issue.rowKey);
+        if (!row) return [];
+        if (
+          !issue.schemaIssue ||
+          !Object.hasOwn(employeeValues.shape, issue.field)
+        )
+          return [issue];
+        const field = issue.field as keyof typeof employeeValues.shape;
+        const result = employeeValues.shape[field].safeParse(
+          row[field],
+          fieldValidation,
+        );
+        if (result.success) return [];
+        const reason = result.error.issues[0];
+        let message = reason.message;
+        if (
+          reason.code === "too_small" &&
+          reason.origin === "string" &&
+          reason.minimum === 1
+        )
+          message = "값을 입력하세요.";
+        if (reason.code === "too_big" && reason.origin === "string")
+          message = `${reason.maximum}자 이내로 입력하세요.`;
+        return [{ ...issue, message }];
+      }),
+    [reportedErrors, draftRows],
+  );
+  const cellErrors = useMemo(
+    () =>
+      rowErrors.flatMap((issue) =>
+        issue.field
+          ? [
+              {
+                rowId: issue.rowKey,
+                field: issue.field === "orgId" ? "orgName" : issue.field,
+                message: issue.message,
+              },
+            ]
+          : [],
+      ),
+    [rowErrors],
+  );
   const [focusTarget, setFocusTarget] = useState<{
     rowId: string;
     field?: string;
@@ -339,6 +390,7 @@ export default function EmployeesPage() {
         setCountCapped(data.countCapped);
         dispatchDraft({ type: "reset", rows: data.rows });
         setError("");
+        setRowErrors([]);
         setSelectedIds([]);
         requestRef.current = null;
       } catch (cause) {
@@ -481,7 +533,6 @@ export default function EmployeesPage() {
     });
     setError("");
     setConflicts([]);
-    setRowErrors([]);
   }
 
   function applyCells(changes: GridCellChange[]) {
@@ -533,7 +584,6 @@ export default function EmployeesPage() {
     });
     setError("");
     setConflicts([]);
-    setRowErrors([]);
   }
 
   function restoreDraft(direction: "undo" | "redo") {
@@ -542,7 +592,6 @@ export default function EmployeesPage() {
     dispatchDraft({ type: direction });
     setError("");
     setConflicts([]);
-    setRowErrors([]);
   }
 
   function addRow() {
@@ -658,18 +707,28 @@ export default function EmployeesPage() {
             : (data.rowErrors[0]?.message ?? "입력값을 확인하세요"),
         );
       } else {
-        const issue = data.issues?.[0];
-        const changedRow = issue && pendingChanges[Number(issue.path[1])];
-        if (issue && changedRow) {
-          const rowId =
-            changedRow.kind === "insert"
-              ? changedRow.clientRowId
-              : changedRow.rowId;
-          const field =
-            typeof issue.path[3] === "string" ? issue.path[3] : undefined;
-          setRowErrors([{ rowKey: rowId, field, message: issue.message }]);
+        const issues = (data.issues ?? []).flatMap((issue) => {
+          const [group, index, , field] = issue.path;
+          const change =
+            group === "changes" && typeof index === "number"
+              ? pendingChanges[index]
+              : undefined;
+          if (!change) return [];
+          return [
+            {
+              rowKey:
+                change.kind === "insert" ? change.clientRowId : change.rowId,
+              field: typeof field === "string" ? field : undefined,
+              message: issue.message,
+              schemaIssue: true,
+            },
+          ];
+        });
+        setRowErrors(issues);
+        if (issues.length) {
+          const { rowKey, field } = issues[0];
           setFocusTarget({
-            rowId,
+            rowId: rowKey,
             field: field === "orgId" ? "orgName" : field,
             nonce: Date.now(),
           });
@@ -1027,6 +1086,7 @@ export default function EmployeesPage() {
                   onEditingChanged={setEditing}
                   commitEditingRef={commitEditingRef}
                   focusTarget={focusTarget}
+                  cellErrors={cellErrors}
                   loading={loading || busy}
                 />
               )}
@@ -1048,8 +1108,8 @@ export default function EmployeesPage() {
               : 현재 버전 {item.currentVersion}
             </p>
           ))}
-          {rowErrors.map((item) => (
-            <p key={`${item.rowKey}:${item.field ?? ""}`}>
+          {rowErrors.map((item, index) => (
+            <p key={`${item.rowKey}:${item.field ?? ""}:${index}`}>
               입력 오류{" "}
               {draftRows.find((row) => row.id === item.rowKey)?.employeeNo ??
                 item.rowKey}

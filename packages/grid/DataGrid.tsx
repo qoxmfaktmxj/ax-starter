@@ -19,6 +19,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -51,6 +52,33 @@ export interface GridCellChange {
   rowId: string;
   field: string;
   value: string;
+}
+
+type GridCellError = { rowId: string; field: string; message: string };
+
+function InvalidGridCell({
+  eGridCell,
+  value,
+  valueFormatted,
+  message,
+  kind,
+}: ICellRendererParams & {
+  message: string;
+  kind: GridColumnKind;
+}) {
+  useLayoutEffect(() => {
+    eGridCell.setAttribute("aria-invalid", "true");
+    eGridCell.setAttribute("aria-description", message);
+    return () => {
+      eGridCell.removeAttribute("aria-invalid");
+      eGridCell.removeAttribute("aria-description");
+    };
+  }, [eGridCell, message]);
+  return kind === "status" && value ? (
+    <EmployeeStatusBadge status={String(value)} />
+  ) : (
+    (valueFormatted ?? String(value ?? ""))
+  );
 }
 
 type GridPoint = { row: number; column: number };
@@ -96,6 +124,7 @@ export interface BatchEditGridProps<
   TRow extends { id: string },
 > extends SharedGridProps {
   mode: "batch-edit";
+  cellErrors?: readonly GridCellError[];
   onCellChange: (rowId: string, field: string, value: unknown) => void;
   rows: TRow[];
   loadRows?: never;
@@ -117,6 +146,30 @@ export function DataGrid<TRow extends { id: string }>(
   const previousSelection = useRef<GridRange | null>(null);
   const rowOrder = useRef<string | null>(null);
   const dragging = useRef(false);
+  const reportedCellErrors =
+    props.mode === "batch-edit" ? props.cellErrors : undefined;
+  const cellErrors = useRef(reportedCellErrors);
+  const findCellError = useCallback(
+    (rowId?: string | null, field?: string | null) =>
+      cellErrors.current?.find(
+        (issue) => issue.rowId === rowId && issue.field === field,
+      ),
+    [],
+  );
+  useLayoutEffect(() => {
+    const previous = cellErrors.current;
+    cellErrors.current = reportedCellErrors;
+    if (!gridApi || (!previous?.length && !reportedCellErrors?.length)) return;
+    const ids = new Set(
+      [...(previous ?? []), ...(reportedCellErrors ?? [])].map(
+        (issue) => issue.rowId,
+      ),
+    );
+    const rowNodes = Array.from(ids)
+      .map((id) => gridApi.getRowNode(id))
+      .filter((node) => node != null);
+    if (rowNodes.length) gridApi.refreshCells({ rowNodes, force: true });
+  }, [gridApi, reportedCellErrors]);
   const fillSeed = useRef<{ range: GridRange; values: string[][] } | null>(
     null,
   );
@@ -137,6 +190,18 @@ export function DataGrid<TRow extends { id: string }>(
             ? ({ value }: ICellRendererParams<TRow, string>) =>
                 value ? <EmployeeStatusBadge status={value} /> : null
             : undefined,
+        cellRendererSelector:
+          props.mode === "batch-edit"
+            ? ({ data }) => {
+                const issue = findCellError(data?.id, column.field);
+                return issue
+                  ? {
+                      component: InvalidGridCell,
+                      params: { message: issue.message, kind: column.kind },
+                    }
+                  : undefined;
+              }
+            : undefined,
         cellEditor: column.kind === "status" ? "agSelectCellEditor" : undefined,
         cellEditorParams:
           column.kind === "status"
@@ -144,6 +209,8 @@ export function DataGrid<TRow extends { id: string }>(
             : undefined,
         cellClass: `gridCell gridCell--${column.kind}`,
         cellClassRules: {
+          "gridCell--invalid": ({ data }) =>
+            !!findCellError(data?.id, column.field),
           "gridCell--selected": (params) => {
             if (!selection.current || params.node.rowIndex == null)
               return false;
@@ -193,7 +260,7 @@ export function DataGrid<TRow extends { id: string }>(
         tooltipField: column.field as ColDef<TRow>["field"],
         flex: 1,
       })),
-    [props.columns, props.mode],
+    [props.columns, props.mode, findCellError],
   );
   const defaultColDef = useMemo<ColDef<TRow>>(
     () => ({ resizable: true, sortable: props.mode === "browse" }),
@@ -622,6 +689,7 @@ export function DataGrid<TRow extends { id: string }>(
     const node = gridApi.getRowNode(props.focusTarget.rowId);
     if (node?.rowIndex == null) return;
     gridApi.ensureNodeVisible(node);
+    gridApi.ensureColumnVisible(props.focusTarget.field ?? "employeeNo");
     gridApi.setFocusedCell(
       node.rowIndex,
       props.focusTarget.field ?? "employeeNo",
@@ -644,6 +712,19 @@ export function DataGrid<TRow extends { id: string }>(
     <div
       className="employeeGrid"
       aria-label={props.label ?? "사원 목록"}
+      onFocusCapture={({ target }) => {
+        const cell = target.closest('[role="gridcell"]');
+        if (!cell || target === cell) return;
+        const issue = findCellError(
+          cell.closest("[row-id]")?.getAttribute("row-id"),
+          cell.getAttribute("col-id"),
+        );
+        if (issue)
+          target.setAttribute(
+            "aria-description",
+            `저장 오류: ${issue.message}`,
+          );
+      }}
       onCopyCapture={onCopy}
       onPasteCapture={onPaste}
       onKeyDownCapture={onKeyDown}

@@ -577,3 +577,14 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - 최종 밀도 E2E 네 건 모두 1440x900 조회 화면에서 기본 9행(55px), 촘촘하게 15행(34px)이 완전히 보였다. 각 밀도의 이름/입사일/월급/상태 편집기, 방향키로 이동한 마지막 행 및 편집 중 포커스 표시, 초안 유지, 기존 쿠키 호환과 새로고침 복원을 확인했다. [기본 화면](../output/density/라이트-기본.png), [촘촘하게](../output/density/라이트-촘촘하게.png), [편집 셀](../output/density/compact-editor.png), [모바일 설정](../output/density/mobile-settings.png)
 - `pnpm exec playwright test --config output/density/host.config.ts` 첫 실행은 49/52, 최종 빌드 실행은 51/52 통과했다. 실패한 기존 검사들은 로그인 시도 제한 안내가 나타나 업무 화면에 진입하지 못했다. 최종 실행에서 남은 스크롤바 검사 파일을 같은 환경에서 `pnpm exec playwright test scrollbar.spec --config output/density/host.config.ts`로 다시 실행해 2/2 통과했다. [최종 전체 로그](../output/density/e2e-final.log), [스크롤바 재실행](../output/density/scrollbar-rerun.log)
 - 검증 프로젝트 라벨 확인 후 `docker compose -p ax-density-261110 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 전용 컨테이너 2개, 네트워크와 DB 볼륨을 정리했다.
+
+## 2026-11-10 사원관리 그리드 상태 중첩 표시
+
+성공 기준은 선택 행의 오류 셀에 키보드 포커스가 있을 때 세 상태를 독립적으로 식별하고 네 테마와 기본/촘촘하게 두 밀도에서 입력값과 편집 공간을 보존하는 것이다.
+
+- 선택 행의 체크박스 칸에 굵은 시작선, 포커스 셀에 안쪽 실선, 서버가 거부한 필드에 점선 테두리와 ‘오류’를 표시했다. 저장 응답의 모든 필드 오류를 행 ID와 필드로 연결하고, 오류 셀과 편집기에는 한국어 사유를 제공한다. 입력을 고치면 해당 필드만 다시 검증한다. [그리드 상태 기준](../DESIGN.md#조회-편집-다운로드)
+- 전용 PostgreSQL/OIDC 환경에서 `pnpm migrate`, `pnpm seed` 성공. `pnpm check` 통과, 경계 검사 69개 소스. `pnpm test` 단위 41개 통과, test 프로필 호스트 `pnpm build` 성공. [빌드 로그](../output/contrast-grid/build.log)
+- `node output/contrast-grid/capture.mjs`로 선택한 E001 행에서 빈 이름의 실제 저장 거부, 포커스, 편집 중 표시를 확인했다. 최초 검사에서 편집기에 오류 설명이 연결되지 않는 경우와 강제 색상 모드의 체크박스 클릭이 가로막히는 경우를 고쳤다. [코발트 라이트 기본](../output/contrast-grid/코발트-라이트-기본.png), [ISU 다크 촘촘하게](../output/contrast-grid/ISU-다크-촘촘하게.png), [편집 중](../output/contrast-grid/edit-다크.png), [강제 색상 모드](../output/contrast-grid/forced-colors.png)
+- `pnpm exec playwright test --config output/contrast-grid/host.config.ts`로 전체 파일을 두 그룹으로 실행했다. 첫 그룹은 19/19, 둘째 그룹은 33/34 통과했다. 사원 상세 전환 테스트 1건은 로그인 횟수 제한 안내에서 멈췄다. 같은 빌드와 인증 설정에서 해당 테스트와 실행 취소/다시 실행 검증을 보강한 상태 중첩 테스트를 재실행해 2/2 통과했다. [컴포넌트 검사](../output/contrast-grid/e2e-components.log), [업무 검사](../output/contrast-grid/e2e-workspace.log), [최종 재검사](../output/contrast-grid/final-check.log)
+- 중첩 테스트에서 두 필드의 실제 422 응답을 사용해 8개 조합의 선택, 포커스, 오류 문구 및 편집 공간을 확인했다. 오류 문구 대비 4.5:1 이상, 포커스 대비 3:1 이상을 검증했고 강제 색상에서 체크박스를 해제/재선택했다. 한 필드만 수정하면 다른 필드의 오류가 유지되며 실행 취소/다시 실행 시 표시도 현재 값에 맞게 복원됐다.
+- 전용 프로젝트 라벨을 확인한 뒤 `docker compose -p ax-contrast-261110 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 컨테이너 2개, 네트워크와 테스트 DB 볼륨을 제거했다.

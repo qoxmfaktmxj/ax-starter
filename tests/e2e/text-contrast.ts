@@ -1,7 +1,7 @@
 // 브라우저에서 실제 텍스트와 불투명 배경색을 sRGB로 환산한다.
 export function textContrast(
   element: Element,
-  part: "text" | "placeholder" | "outline" | "border" = "text",
+  part: "text" | "placeholder" | "outline" | "border" | "errorMark" = "text",
 ) {
   const context = document.createElement("canvas").getContext("2d")!;
   function luminance(color: string) {
@@ -15,9 +15,13 @@ export function textContrast(
       });
     return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
   }
-  const style = getComputedStyle(element);
+  const style = getComputedStyle(
+    element,
+    part === "errorMark" ? "::before" : null,
+  );
   const foreground = {
     text: style.color,
+    errorMark: style.color,
     placeholder: getComputedStyle(element, "::placeholder").color,
     outline: style.outlineColor,
     border: style.borderTopColor,
