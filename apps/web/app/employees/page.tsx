@@ -31,7 +31,7 @@ import { WorkspaceIcon } from "../../../../packages/ui/workspace/WorkspaceIcon";
 import {
   WorkspaceShell,
   SearchPanel,
-  ActionButton,
+  SaveButton,
   GridLayout,
   GridPanel,
   TextField,
@@ -818,7 +818,7 @@ export default function EmployeesPage() {
             ]
           : []),
         {
-          label: "화면 템플릿",
+          label: "디자인 시스템",
           icon: "layout",
           onSelect: () => requestAction("templates"),
         },
@@ -957,17 +957,13 @@ export default function EmployeesPage() {
                     >
                       삭제
                     </button>
-                    <ActionButton
-                      primary
+                    <SaveButton
+                      count={changes.length}
                       pending={busy}
-                      pendingLabel="저장 중"
-                      className="primary"
                       onPointerDown={() => commitEditingRef.current?.()}
                       onClick={() => void save()}
-                      disabled={busy || loading || (!dirty && !editing)}
-                    >
-                      저장 {changes.length}건
-                    </ActionButton>
+                      disabled={loading || (!dirty && !editing)}
+                    />
                     <button
                       onClick={() => restoreDraft("undo")}
                       disabled={busy || draftState.undo.length === 0}

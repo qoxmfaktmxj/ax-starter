@@ -1,5 +1,7 @@
 "use client";
 import { useCallback, useState } from "react";
+import { Tabs } from "@base-ui/react/tabs";
+import { SaveButtonExample } from "./SaveButtonExample";
 import { authClient } from "../../auth-client";
 import {
   DataGrid,
@@ -38,9 +40,9 @@ const courses = Array.from({ length: 24 }, (_, i) => ({
     "차",
 }));
 const descriptions = [
-  "교육 과정 목록을 검색하고 페이지를 넘깁니다.",
-  "과정을 선택하면 오른쪽에서 교육 일정을 확인할 수 있습니다.",
-  "과정을 선택하면 아래에 교육 일정과 신청자 목록이 열립니다.",
+  "",
+  "과정을 선택하면 교육 일정이 열립니다.",
+  "과정을 선택하면 교육 일정과 신청자 목록이 열립니다.",
   "선택한 과정의 일정, 신청자, 준비 자료를 함께 비교합니다.",
 ];
 
@@ -204,6 +206,7 @@ function SettingsExample({
 export default function DesignSystemPage() {
   const { me, authError } = useWorkspaceUser();
   const [layout, setLayout] = useState<MenuLayout>("side");
+  const [section, setSection] = useState("templates");
   const [count, setCount] = useState(1);
   const [view, setView] = useState<"grids" | "permissions" | "settings">(
     "grids",
@@ -280,22 +283,27 @@ export default function DesignSystemPage() {
             ]
           : []),
         {
-          label: "화면 템플릿",
+          label: "디자인 시스템",
           icon: "layout",
           active: true,
           onSelect: () => {
+            setSection("templates");
             if (view !== "grids") setSelected(null);
             setView("grids");
           },
         },
       ]}
     >
-      <section className="workspaceMain workCatalog">
+      <Tabs.Root
+        className="workspaceMain workCatalog"
+        value={section}
+        onValueChange={(value) => {
+          setSection(String(value));
+          setSelected(null);
+        }}
+      >
         <header className="workspaceHeader">
-          <div>
-            <h1>화면 템플릿</h1>
-            <p className="resultCount">AX Starter 디자인 시스템</p>
-          </div>
+          <h1>디자인 시스템</h1>
           <label className="workMenuChoice">
             메뉴 배치
             <select
@@ -307,99 +315,113 @@ export default function DesignSystemPage() {
             </select>
           </label>
         </header>
-        <nav className="workExamples" aria-label="화면 유형">
-          {[1, 2, 3, 4].map((n) => (
+        <Tabs.List className="workExamples" aria-label="디자인 시스템">
+          <Tabs.Tab value="templates">화면 템플릿</Tabs.Tab>
+          <Tabs.Tab value="components">컴포넌트</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="components">
+          <SaveButtonExample />
+        </Tabs.Panel>
+        <Tabs.Panel value="templates">
+          <nav className="templateChoices" aria-label="화면 유형">
+            {[1, 2, 3, 4].map((n) => (
+              <button
+                key={n}
+                aria-pressed={view === "grids" && count === n}
+                onClick={() => {
+                  if (view !== "grids") setSelected(null);
+                  setView("grids");
+                  setCount(n);
+                }}
+              >
+                그리드 {n}개
+              </button>
+            ))}
             <button
-              key={n}
-              aria-pressed={view === "grids" && count === n}
-              onClick={() => {
-                if (view !== "grids") setSelected(null);
-                setView("grids");
-                setCount(n);
-              }}
+              aria-pressed={view === "settings"}
+              onClick={() => setView("settings")}
             >
-              그리드 {n}개
+              입력 폼
             </button>
-          ))}
-          <button
-            aria-pressed={view === "settings"}
-            onClick={() => setView("settings")}
-          >
-            입력 폼
-          </button>
-          <button
-            aria-pressed={view === "permissions"}
-            onClick={() => setView("permissions")}
-          >
-            내 권한
-          </button>
-        </nav>
-        {view === "settings" ? (
-          <SettingsExample
-            value={settings}
-            onApply={(value) => {
-              setSettings(value);
-              setSelected(null);
-              setView("grids");
-              setRevision((v) => v + 1);
-            }}
-          />
-        ) : view === "permissions" ? (
-          <PermissionSummary me={me} />
-        ) : (
-          <>
-            <p className="workTemplateNote">
-              교육 업무 예시 데이터입니다. {descriptions[count - 1]}
-            </p>
-            <SearchPanel
-              aria-label="예시 과정 검색"
-              onSubmit={(e) => {
-                e.preventDefault();
-                setRows(
-                  courses.filter(
-                    (c) =>
-                      c.name.includes(draft.trim()) ||
-                      c.code.includes(draft.trim()),
-                  ),
-                );
+            <button
+              aria-pressed={view === "permissions"}
+              onClick={() => setView("permissions")}
+            >
+              내 권한
+            </button>
+          </nav>
+          {view === "settings" ? (
+            <SettingsExample
+              value={settings}
+              onApply={(value) => {
+                setSettings(value);
                 setSelected(null);
+                setView("grids");
                 setRevision((v) => v + 1);
               }}
-            >
-              <TextField
-                label="교육 과정"
-                value={draft}
-                placeholder="과정명 또는 코드"
-                onChange={(e) => setDraft(e.target.value)}
-              />
-            </SearchPanel>
-            <GridLayout>
-              <ExampleGrid
-                key={revision}
-                pageSize={settings.pageSize}
-                panel={{
-                  title: settings.title,
-                  labels: ["과정 코드", "과정명"],
-                  rows,
+            />
+          ) : view === "permissions" ? (
+            <PermissionSummary me={me} />
+          ) : (
+            <>
+              <p className="workTemplateNote">
+                교육 업무 예시 데이터입니다. {descriptions[count - 1]}
+              </p>
+              <SearchPanel
+                aria-label="예시 과정 검색"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setRows(
+                    courses.filter(
+                      (c) =>
+                        c.name.includes(draft.trim()) ||
+                        c.code.includes(draft.trim()),
+                    ),
+                  );
+                  setSelected(null);
+                  setRevision((v) => v + 1);
                 }}
-                onSelect={(ids) => setSelected(ids[0] ?? null)}
-              />
-              {details.slice(0, count - 1).map((panel) =>
-                course ? (
-                  <ExampleGrid
-                    key={course.id + panel.title}
-                    panel={{ ...panel, title: course.code + " " + panel.title }}
-                  />
-                ) : (
-                  <GridPanel key={panel.title} title={panel.title}>
-                    <p className="workEmpty">교육 과정에서 행을 선택하세요.</p>
-                  </GridPanel>
-                ),
-              )}
-            </GridLayout>
-          </>
-        )}
-      </section>
+              >
+                <TextField
+                  label="교육 과정"
+                  value={draft}
+                  placeholder="과정명 또는 코드"
+                  onChange={(e) => setDraft(e.target.value)}
+                />
+              </SearchPanel>
+              <GridLayout>
+                <ExampleGrid
+                  key={revision}
+                  pageSize={settings.pageSize}
+                  panel={{
+                    title: settings.title,
+                    labels: ["과정 코드", "과정명"],
+                    rows,
+                  }}
+                  onSelect={(ids) => setSelected(ids[0] ?? null)}
+                />
+                {details.slice(0, count - 1).map((panel) =>
+                  course ? (
+                    <ExampleGrid
+                      key={course.id + panel.title}
+                      panel={{
+                        ...panel,
+                        title: course.code + " " + panel.title,
+                      }}
+                    />
+                  ) : (
+                    <GridPanel key={panel.title} title={panel.title}>
+                      <p className="workEmpty">
+                        교육 과정에서 행을 선택하세요.
+                      </p>
+                    </GridPanel>
+                  ),
+                )}
+              </GridLayout>
+            </>
+          )}
+        </Tabs.Panel>
+      </Tabs.Root>
     </WorkspaceShell>
   );
 }

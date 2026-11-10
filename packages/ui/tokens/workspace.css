@@ -4,10 +4,14 @@ html:has(.workspaceShell) {
   --color-surface-subtle: #fafbfc;
   --color-text: #364a63;
   --color-text-on-subtle: #526580;
-  --color-text-muted: #61738a;
+  --color-text-muted: #5b6d83;
   --color-border: #e3e8ef;
   --color-border-strong: #cbd4df;
-  --color-control-border: var(--neutral-control-border);
+  --color-control-border: color-mix(
+    in srgb,
+    var(--neutral-control-border) 90%,
+    var(--color-text)
+  );
   --work-selection: color-mix(
     in srgb,
     var(--color-action) 12%,

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { signInWithPassword } from "./login";
+import { textContrast } from "./text-contrast";
 
 test("appearance choices update the grid without losing selection and survive navigation", async ({
   page,
@@ -29,39 +30,25 @@ test("appearance choices update the grid without losing selection and survive na
     const colors = await page.evaluate(() => {
       const style = (selector: string) =>
         getComputedStyle(document.querySelector(selector)!);
-      const context = document.createElement("canvas").getContext("2d")!;
-      function luminance(color: string) {
-        context.fillStyle = color;
-        context.fillRect(0, 0, 1, 1);
-        const rgb = Array.from(context.getImageData(0, 0, 1, 1).data)
-          .slice(0, 3)
-          .map((channel) => {
-            const v = channel / 255;
-            return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-          });
-        return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
-      }
       const primary = style(".modeAction");
-      const ratios = [
-        primary,
-        style(".gridStatus[data-status=ACTIVE]"),
-        style(".gridStatus[data-status=LEAVE]"),
-      ].map((s) => {
-        const a = luminance(s.color),
-          b = luminance(s.backgroundColor);
-        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-      });
       return {
         primary: primary.backgroundColor,
         surface: style(".ag-root-wrapper").backgroundColor,
         panel: style(".workspaceTablePanel").backgroundColor,
-        ratios,
       };
     });
     buttons.add(colors.primary);
     surfaces.add(colors.surface);
     expect(colors.surface).toBe(colors.panel);
-    expect(Math.min(...colors.ratios)).toBeGreaterThanOrEqual(4.5);
+    for (const selector of [
+      ".modeAction",
+      ".gridStatus[data-status=ACTIVE]",
+      ".gridStatus[data-status=LEAVE]",
+    ]) {
+      expect(
+        await page.locator(selector).first().evaluate(textContrast),
+      ).toBeGreaterThanOrEqual(4.5);
+    }
   }
   expect(buttons.size).toBe(4);
   expect(surfaces.size).toBe(2);

@@ -535,3 +535,14 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - `gh pr merge 2 --merge --match-head-commit 96ee228d41abdc14167fa631cb3695f9f7295701` 성공. `gh pr view 2 --json state,mergeCommit`에서 MERGED와 병합 커밋 `644fc89`를 확인했다.
 - `git switch main`과 `git pull --ff-only origin main` 성공. `git rev-parse HEAD origin/main` 결과 두 커밋이 일치했다.
 - DESIGN.md에 기초 규칙, 컴포넌트, 업무 패턴, 화면 템플릿의 기준과 예시를 기록했다. AGENTS.md에 작업 전 기준 정의와 현 개발 단계의 main 직접 반영 방식을 명시했다.
+
+## 2026-11-10 디자인 시스템 컴포넌트 탭과 저장 버튼
+
+성공 기준은 공통 저장 버튼의 기본/저장 중/비활성을 코발트/ISU와 라이트/다크에서 비교하고, 키보드 실행, 글자 대비 4.5:1, 사원관리에서 중복 제출 차단을 검증하는 것이다.
+
+- 디자인 시스템에 화면 템플릿과 컴포넌트 탭을 두고 사원관리와 예시가 같은 SaveButton을 사용하도록 했다. 제목과 부제의 중복, 예시 화면 설명, 조회 범위 아이콘의 장식 배경을 정리했다. 네 디자인 스킬을 참고하는 규칙은 AGENTS.md에, 저장 버튼 상태 기준은 DESIGN.md에 기록했다.
+- 검증 전용 PostgreSQL/OIDC에서 `pnpm migrate`, `pnpm seed` 성공. `pnpm check` 통과, 경계 검사 67개 소스. `pnpm test` 단위 41개 통과. test 프로필 호스트 `pnpm build` 통과. [빌드 로그](../output/save-catalog/build.log)
+- 첫 브라우저 검사에서 라이트 비활성 글자 대비가 4.493:1로 실패했다. 보조색 조정 후 `pnpm exec playwright test --config output/save-catalog/host.config.ts` 전체 40개 통과. 사원관리 더블클릭에서 실제 저장 요청은 1회였다. 마지막 입력 테두리 조정 후 appearance, workspace-system, batch-save 9개도 다시 통과했다. [전체](../output/save-catalog/e2e.log), [최종 관련 검사](../output/save-catalog/e2e-final.log)
+- `node output/save-catalog/capture.mjs`에서 버튼 12개 조합의 대비는 최소 4.551:1, 최대 9.510:1이었다. 320px/1440px에서 메뉴 A/B와 기존 템플릿 6종을 확인했다. [측정값](../output/save-catalog/contrast.log), [라이트](../output/save-catalog/코발트-라이트.png), [다크](../output/save-catalog/ISU-다크.png), [모바일](../output/save-catalog/mobile.png)
+- Hallmark 정적 검사는 기존 공통 CSS의 스탬프, 토큰 선언 위치, 간격 등을 지적했다. 렌더 검사에서 발견한 메뉴 배치 선택 상자의 테두리 대비 2.94:1을 수정했다. 로그인 후 캡처한 컴포넌트 DOM과 실제 빌드 CSS로 `sloplint.mjs --url http://127.0.0.1:3185/ --scope app --genre editorial` 실행, FAIL/REFLEX/WARN 각각 0. `copy-lint.mjs` 문구 검사 FAIL/WARN 0. [렌더 검사](../output/save-catalog/hallmark-final.log), [문구 검사](../output/save-catalog/copy-lint.log)
+- 전용 프로젝트 라벨 확인 후 `docker compose -p ax-save-catalog-261110 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 컨테이너 2개, 네트워크, 테스트 DB 볼륨을 제거했다.

@@ -1,11 +1,63 @@
 import { expect, test } from "@playwright/test";
 import { signInWithPassword } from "./login";
+import { textContrast } from "./text-contrast";
+
+test("the component catalog shows three save states in all four themes", async ({
+  page,
+}) => {
+  await signInWithPassword(page, "org-manager");
+  await page.getByRole("button", { name: "디자인 시스템" }).click();
+  const componentTab = page.getByRole("tab", { name: "컴포넌트" });
+  await page.getByRole("tab", { name: "화면 템플릿" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await componentTab.press("Enter");
+  const panel = page.getByRole("tabpanel", { name: "컴포넌트" });
+  const ready = panel.getByRole("button", { name: "저장 1건" });
+  const pending = panel.getByRole("button", { name: "저장 중" });
+  const disabled = panel.getByRole("button", { name: "저장 0건" });
+  const colors = new Set<string>();
+  let writes = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().includes("/api/"))
+      writes++;
+  });
+  for (const brand of ["코발트", "ISU"]) {
+    for (const mode of ["라이트", "다크"]) {
+      await page.getByRole("button", { name: "화면 설정" }).click();
+      await page.getByRole("radio", { name: brand }).check();
+      await page.getByRole("radio", { name: mode }).check();
+      await page.getByRole("button", { name: "닫기" }).click();
+      await expect(ready).toBeEnabled();
+      await expect(pending).toBeDisabled();
+      await expect(pending).toHaveAttribute("aria-busy", "true");
+      await expect(disabled).toBeDisabled();
+      for (const button of [ready, pending, disabled]) {
+        expect(await button.evaluate(textContrast)).toBeGreaterThanOrEqual(4.5);
+      }
+      colors.add(
+        await ready.evaluate((el) => getComputedStyle(el).backgroundColor),
+      );
+    }
+  }
+  expect(colors.size).toBe(4);
+  await page.setViewportSize({ width: 320, height: 740 });
+  await ready.press("Enter");
+  await expect(pending).toHaveCount(2);
+  await expect(panel.getByRole("status")).toHaveText(
+    "예시 1건을 저장했습니다.",
+  );
+  await expect(ready).toBeEnabled();
+  expect(await panel.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
+    true,
+  );
+  expect(writes).toBe(0);
+});
 
 test("permissions and related grids follow the signed-in user and selected course", async ({
   page,
 }) => {
   await signInWithPassword(page, "org-manager");
-  await page.getByRole("button", { name: "화면 템플릿" }).click();
+  await page.getByRole("button", { name: "디자인 시스템" }).click();
   await page.getByLabel("메뉴 배치").selectOption("top");
   await page.getByRole("button", { name: "그리드 4개" }).click();
   const master = page.getByRole("region", { name: "교육 과정", exact: true });

@@ -40,9 +40,7 @@ export function WorkspaceShell({
       {" "}
       <small className="workspaceEnvironment">가상 데이터 전용 로컬 환경</small>
       <div className="workspaceProfile">
-        <span className="profileIcon">
-          <WorkspaceIcon name="user" />
-        </span>
+        <WorkspaceIcon name="user" />
         <span>
           <small>조회 범위</small>
           <strong>{scopeLabel}</strong>
@@ -136,6 +134,30 @@ export function ActionButton({
       {pending && <span className="workSpinner" aria-hidden="true" />}
       {pending && pendingLabel ? pendingLabel : children}
     </button>
+  );
+}
+
+export function SaveButton({
+  count,
+  pending,
+  ...props
+}: Pick<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "disabled" | "onClick" | "onPointerDown"
+> & {
+  count: number;
+  pending?: boolean;
+}) {
+  return (
+    <ActionButton
+      {...props}
+      className="workSaveButton"
+      primary
+      pending={pending}
+      pendingLabel="저장 중"
+    >
+      저장 {count}건
+    </ActionButton>
   );
 }
 

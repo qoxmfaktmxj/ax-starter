@@ -168,9 +168,27 @@ test("save commits the last value while the cell editor is still open", async ({
       .fill("마지막 입력 저장");
     const saveButton = page.getByRole("button", { name: /저장 .*건/ });
     await expect(saveButton).toBeEnabled();
-    await saveButton.click();
+    let requests = 0;
+    let resume!: () => void;
+    const hold = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    await page.route("**/api/employees/batch", async (route) => {
+      requests++;
+      await hold;
+      await route.continue();
+    });
+    try {
+      await saveButton.dblclick();
+      const pendingButton = page.getByRole("button", { name: "저장 중" });
+      await expect(pendingButton).toBeDisabled();
+      await expect(pendingButton).toHaveAttribute("aria-busy", "true");
+    } finally {
+      resume();
+    }
     await expect(page.getByText("1건을 저장했습니다.")).toBeVisible();
     expect((await getEmployee(page)).name).toBe("마지막 입력 저장");
+    expect(requests).toBe(1);
   } finally {
     await restoreSeed(page);
   }

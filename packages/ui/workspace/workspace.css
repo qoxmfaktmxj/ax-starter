@@ -122,15 +122,6 @@ body:has(.workspaceShell) {
   font-size: 13px;
   font-weight: 650;
 }
-.profileIcon {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--color-action-text);
-  background: var(--color-action);
-}
 .workspaceMain {
   grid-column: 2;
   min-width: 0;
@@ -206,7 +197,6 @@ body:has(.workspaceShell) {
   margin-left: -1px;
 }
 .workspaceActions .modeAction,
-.workspaceToolbar .primary,
 .workspaceModalPopup .primary {
   background: var(--color-action);
   color: var(--color-action-text);
@@ -218,7 +208,7 @@ body:has(.workspaceShell) {
   background: var(--color-surface-subtle);
 }
 .workspaceActions .modeAction:not(:disabled):hover,
-.workspaceToolbar .primary:not(:disabled):hover,
+.workspaceShell button[data-action="primary"]:enabled:hover,
 .workspaceModalPopup .primary:hover {
   background: var(--color-action-hover);
   border-color: var(--color-action-hover);
@@ -720,9 +710,70 @@ body:has(.workspaceShell) {
   color: var(--color-text-on-subtle);
   font: 600 14px var(--font-sans);
 }
-.workExamples button[aria-pressed="true"] {
+.workExamples button[aria-selected="true"] {
   border-bottom-color: var(--color-action);
   color: var(--color-link);
+}
+.templateChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.templateChoices button {
+  min-height: var(--control-compact);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text-on-subtle);
+}
+.templateChoices button[aria-pressed="true"] {
+  border-color: var(--color-action);
+  color: var(--color-link);
+}
+.saveExample h2 {
+  margin: 0;
+}
+.saveExample p {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-on-subtle);
+}
+.saveExample dl {
+  margin: var(--space-6) 0 0;
+}
+.saveExample dl > div {
+  display: grid;
+  grid-template-columns: 5em 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+.saveExample dt {
+  font-weight: 600;
+}
+.saveExample dd {
+  margin: 0;
+  color: var(--color-text-on-subtle);
+}
+.workSaveButton {
+  min-width: 7em;
+}
+.saveExample [role="status"]:empty {
+  margin: 0;
+}
+@media (max-width: 600px) {
+  .workspaceShell button.workSaveButton {
+    min-height: var(--control-large);
+  }
+  .saveExample dl > div {
+    grid-template-columns: 1fr auto;
+    row-gap: var(--space-1);
+  }
+  .saveExample dd:last-child {
+    grid-area: 1 / 2 / span 2;
+  }
 }
 .workCatalog .workTemplateNote {
   margin-bottom: 12px;

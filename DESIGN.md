@@ -77,12 +77,25 @@ AX Starter의 공통 심볼은 [WorkspaceShell](packages/ui/workspace/Workspace.
 | `SearchPanel` | 검색 필터와 조회 버튼 | 폼 이름, 레이블이 있는 입력, 제출 핸들러, 실제 요청의 pending 상태 |
 | `TextField` | 사번, 과정명 등 문자열 입력 | label, value, onChange. hint는 입력 형식, error는 수정할 이유다. 오류를 입력과 연결한다. |
 | `ActionButton` | 조회, 저장, Excel 요청 | primary, size, disabled, pending, pendingLabel. API 동작은 소유 화면에 둔다. |
+| `SaveButton` | 사원 일괄편집, 디자인 시스템의 컴포넌트 탭 | 변경 건수와 저장 가능 여부, 진행 상태, 저장 핸들러. 마지막 셀을 편집 중이면 건수 집계 전에도 저장을 시작할 수 있다. |
 | [ExportActions와 ExportResult](packages/ui/workspace/ExportActions.tsx) | Excel/PDF 요청과 결과 | 요청 핸들러, 선택 행 여부, 진행 중 형식과 활성 권한. 완료된 작업의 다운로드 주소는 서버에서 재인가한다. |
 | `GridLayout`, `GridPanel` | 1~4개 업무 표 | 하위 패널과 제목. 각 패널은 별도의 DataGrid나 해당 업무의 표를 담는다. |
 | `DataGrid` | 행 비교, 다중 선택, 일괄편집 | columns, label, browse의 loadRows 또는 batch-edit의 rows. AG Grid 타입은 어댑터 내부에서만 사용한다. |
 | `DirtyDialog` | 미저장 상태에서 조회, 이동, 모드 변경 | 변경 건수, 계속 편집, 버리고 이동, 저장 후 이동 핸들러 |
 
-다음은 조립 예다. 여기서 `loadCourses`는 화면의 서비스 API를 호출하고 정렬과 시작/끝 행을 전달한다. `runSearch`는 입력 중인 조건을 적용하고 그리드의 첫 페이지부터 다시 읽는다.
+### 저장 버튼 기준
+
+| 상태 | 표시 | 동작 |
+| --- | --- | --- |
+| 기본 | 브랜드 주요 행동색, ‘저장 N건’ | 클릭, Enter, Space로 실행한다. 사원관리에서는 편집 중인 셀을 먼저 확정한다. |
+| 저장 중 | ‘저장 중’, 진행 표시 | 네이티브 disabled와 aria-busy를 적용한다. 사원관리에서는 처리 중 연속 입력에도 저장 요청을 한 번만 보낸다. 모션 감소 환경에서는 진행 문구로 상태를 전달한다. |
+| 비활성 | 중립색, 현재 변경 건수 | 변경이나 편집 중인 셀이 없거나 조회 중이면 제출할 수 없다. |
+
+디자인 시스템의 ‘컴포넌트’ 탭에서 [저장 버튼 예시](apps/web/app/design-system/SaveButtonExample.tsx)를 확인한다. 세 상태를 나란히 비교하고 기본 예시를 눌러 저장 과정을 재현한다. 화면 설정에서 코발트/ISU와 라이트/다크를 바꿔 글자 대비와 포커스를 확인한다. 예시는 업무 데이터를 전송하지 않는다.
+
+### 그리드 조립 예
+
+여기서 `loadCourses`는 화면의 서비스 API를 호출하고 정렬과 시작/끝 행을 전달한다. `runSearch`는 입력 중인 조건을 적용하고 그리드의 첫 페이지부터 다시 읽는다.
 
 ```tsx
 <GridLayout>
