@@ -162,6 +162,7 @@ export default function EmployeesPage() {
   });
   const draftRows = draftState.rows;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const detailId = selectedIds.find((id) => !id.startsWith("new-"));
   const [selectedRow, setSelectedRow] = useState<EmployeeRow | null>(null);
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [fileBusy, setFileBusy] = useState(false);
@@ -361,18 +362,17 @@ export default function EmployeesPage() {
   }, [mode, me, loadBatch, refresh]);
 
   useEffect(() => {
-    const id = selectedIds.find((value) => !value.startsWith("new-"));
-    if (!id) {
+    if (!detailId) {
       setSelectedRow(null);
       setFiles([]);
       return;
     }
     let cancelled = false;
     void Promise.all([
-      fetch(`/api/employees/${id}`, { cache: "no-store" }).then((response) =>
-        response.ok ? response.json() : null,
+      fetch(`/api/employees/${detailId}`, { cache: "no-store" }).then(
+        (response) => (response.ok ? response.json() : null),
       ),
-      fetch(`/api/employees/${id}/files`, { cache: "no-store" }).then(
+      fetch(`/api/employees/${detailId}/files`, { cache: "no-store" }).then(
         (response) => (response.ok ? response.json() : { rows: [] }),
       ),
     ])
@@ -388,7 +388,7 @@ export default function EmployeesPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedIds, refresh]);
+  }, [detailId, refresh]);
 
   useEffect(() => {
     if (
@@ -1075,7 +1075,7 @@ export default function EmployeesPage() {
       </section>
       {(selectedIds.length > 0 || exportJob) && (
         <aside className="workspaceDetail" aria-label="상세와 작업">
-          {selectedRow && (
+          {selectedRow && selectedRow.id === detailId && (
             <>
               <h2>사원 상세</h2>
               <div className="detailCard">

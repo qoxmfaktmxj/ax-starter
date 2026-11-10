@@ -66,3 +66,31 @@ test("a new employee search resets the page and indicates a pending query", asyn
     page.getByRole("gridcell", { name: "E001", exact: true }),
   ).toBeVisible();
 });
+
+test("detail actions follow the current employee while a new detail loads", async ({
+  page,
+}) => {
+  await signInWithPassword(page, "hr-admin");
+  const checkbox = (employeeNo: string) =>
+    page.getByRole("row").filter({ hasText: employeeNo }).getByRole("checkbox");
+  await checkbox("E001").click();
+  const upload = page.getByRole("button", { name: "첨부 업로드" });
+  await expect(upload).toBeVisible();
+  await checkbox("E002").click();
+  let release!: () => void;
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(/\/api\/employees\/[^/]+\/files$/, async (route) => {
+    await hold;
+    await route.continue();
+  });
+  try {
+    await checkbox("E001").click();
+    await expect(upload).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await expect(page.locator(".detailCard")).toContainText("E002");
+  await expect(upload).toBeVisible();
+});

@@ -2,6 +2,13 @@
 
 기준일: 2026-09-24. 상태: 계획의 로컬 가상 데이터 MVP P0 기능과 제한된 검증 완료. P1과 실제 운영 연결은 아래에 별도로 남긴다. 이 기록은 실행한 명령과 결과를 기준으로 한다.
 
+## 2026-11-10 main 동기화와 후속 작업 확인
+
+성공 기준은 원격 main과의 동기화 여부, 미병합 작업과 PR 유무를 확인하는 것이다.
+
+- `git pull --ff-only` 결과 main은 `6c7a7a2`에서 이미 최신이었고 `origin/codex/employee-workspace`를 새로 가져왔다.
+- `git rev-list --left-right --count main...origin/codex/employee-workspace` 결과는 `0 1`이다. 원격 브랜치의 추가 커밋은 `00a7c46`이며 `gh pr list --state all --head codex/employee-workspace` 조회 결과는 비어 있었다.
+
 ## 작업 결과
 
 | 단계 | 구현                                                                                          | 대표 경로                                                                          |
@@ -502,3 +509,10 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 
 - 공통 셸에 사원관리 초기 시안의 사선 A SVG를 복원하고 DESIGN.md에 심볼과 이름의 배치 기준을 추가했다. corepack pnpm check와 Docker runtime 빌드가 통과했다.
 - 로컬 데모 갱신 후 node output/brand-review/verify.cjs로 두 메뉴의 SVG 경로가 원본과 일치함을 확인했다. 데스크톱 상단의 이름 표시와 왼쪽 메뉴 및 모바일의 심볼 단독 표시도 확인했다. [상단 로고](../output/brand-review/final-logo.png).
+
+## 2026-11-10 사원관리 브랜치 검토
+
+성공 기준은 main과의 병합 가능성을 확인하고 사원 전환 중 상세 및 첨부 작업이 현재 선택을 따르는지 검증하는 것이다.
+
+- `git merge-tree --write-tree origin/main HEAD` exit 0, 충돌 없음. `pnpm check` 통과, 아키텍처 검사 64개 소스. `pnpm test` 단위 테스트 41개 통과.
+- 선택이 바뀌면 새 상세 응답이 도착할 때까지 이전 사원의 첨부 동작을 숨겼다. 두 번째 사원의 상세 응답을 지연시키는 브라우저 회귀 검사를 추가했다.
