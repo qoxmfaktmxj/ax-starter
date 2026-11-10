@@ -527,3 +527,11 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - 격리한 실제 PostgreSQL/OIDC와 호스트 Chrome으로 `pnpm exec playwright test --config output/theme-review-261110/host.config.ts` 실행, 전체 39개 통과. 네 조합의 표 배경과 버튼/재직/휴직 글자 대비, 쿠키 복원, 320px에서 키보드 전환과 편집값 보존을 확인했다. [브라우저 로그](../output/theme-review-261110/full-e2e.log)
 - `node output/theme-review-261110/capture.mjs`로 [다크 사원관리](../output/theme-review-261110/dark-grid.png), [모바일 설정](../output/theme-review-261110/mobile-settings.png), [모바일 로그인](../output/theme-review-261110/mobile-login.png)을 캡처해 확인했다. `node output/theme-review-261110/edge-cases.mjs`에서 쿠키 저장 제한 안내, 다크 로그인 정지 화면과 WebGL을 확인했다.
 - Docker 이미지 빌드의 Debian TLS 오류는 남아 있다. 전용 프로젝트 라벨을 확인하고 `docker compose -p ax-theme-host-261110 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 컨테이너 2개, 네트워크, 시험 DB 볼륨을 제거했다. P1은 실행하지 않았다.
+
+## 2026-11-10 테마 병합과 디자인 시스템 기준
+
+성공 기준은 PR #2를 병합하고 로컬 main과 원격 main의 일치를 확인한 뒤, 템플릿의 위치와 개발 단계의 직접 반영 방식을 저장소 지침에 명시하는 것이다.
+
+- `gh pr merge 2 --merge --match-head-commit 96ee228d41abdc14167fa631cb3695f9f7295701` 성공. `gh pr view 2 --json state,mergeCommit`에서 MERGED와 병합 커밋 `644fc89`를 확인했다.
+- `git switch main`과 `git pull --ff-only origin main` 성공. `git rev-parse HEAD origin/main` 결과 두 커밋이 일치했다.
+- DESIGN.md에 기초 규칙, 컴포넌트, 업무 패턴, 화면 템플릿의 기준과 예시를 기록했다. AGENTS.md에 작업 전 기준 정의와 현 개발 단계의 main 직접 반영 방식을 명시했다.
