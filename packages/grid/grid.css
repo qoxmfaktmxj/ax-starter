@@ -18,6 +18,21 @@
   font-variant-numeric: tabular-nums;
 }
 
+.employeeGrid .ag-cell {
+  scroll-margin-block: var(--space-1);
+}
+
+.employeeGrid .ag-cell.ag-cell-focus:focus-visible,
+.employeeGrid .ag-cell.ag-cell-inline-editing:focus-within {
+  outline: 2px solid var(--color-action-hover);
+  outline-offset: -2px;
+}
+
+.employeeGrid .ag-cell-inline-editing input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .employeeGrid .ag-cell.gridCell--selected {
   box-shadow: inset 0 0 0 1px var(--color-action);
   background: var(--color-surface-subtle);

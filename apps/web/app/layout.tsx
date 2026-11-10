@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const { theme, mode } = readAppearance(
+  const { theme, mode, density } = readAppearance(
     (await cookies()).get(appearanceCookie)?.value,
   );
   return (
@@ -23,6 +23,7 @@ export default async function RootLayout({
       lang="ko"
       data-theme={theme}
       data-mode={mode}
+      data-density={density}
       data-ag-theme-mode={mode}
     >
       <body>{children}</body>

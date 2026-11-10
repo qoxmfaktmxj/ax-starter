@@ -566,3 +566,14 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - `pnpm exec playwright test --config output/badge-catalog/host.config.ts` 전체 48개 통과. 네 테마에서 조직 담당자가 조회한 E001(재직), E009(휴직)의 상태 문구, 글자색, 배경색을 카탈로그와 대조했다. 코발트와 ISU 각각 라이트에서 재직 4.53:1, 휴직 4.70:1, 다크에서 재직 7.54:1, 휴직 8.16:1이었다. [브라우저 로그](../output/badge-catalog/e2e.log)
 - `node output/badge-catalog/capture.mjs`로 네 테마의 실제 그리드와 카탈로그, 320px 배치를 확인했다. [실제 그리드](../output/badge-catalog/grid-ISU-다크.png), [카탈로그](../output/badge-catalog/코발트-라이트.png), [모바일](../output/badge-catalog/mobile.png)
 - 프로젝트 라벨 확인 후 `docker compose -p ax-badge-catalog-261110 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 전용 컨테이너 2개, 네트워크와 테스트 DB 볼륨을 정리했다.
+
+## 2026-11-10 업무 그리드 밀도 전환
+
+성공 기준은 코발트/ISU와 라이트/다크 네 조합에서 같은 사원관리 화면에 완전히 보이는 행 수가 증가하고, 두 밀도 모두 편집기와 키보드 포커스가 셀 및 화면 경계 안에 들어오는 것이다.
+
+- 화면 설정에 표 밀도를 추가했다. 기존 두 항목 쿠키는 브랜드/명암을 복원하고 기본 밀도로 시작한다. 변경한 밀도는 즉시 적용되며 새 요청의 최초 HTML에도 복원된다. [밀도 기준](../DESIGN.md#시각-기준)
+- `pnpm migrate`, `pnpm seed`로 전용 PostgreSQL/OIDC 환경을 준비했다. `pnpm check` exit 0, 아키텍처 69개 소스. `pnpm test` 단위 41개 통과. test 프로필 호스트 `pnpm build` 성공. [빌드 로그](../output/density/build.log)
+- `node output/density/boundary.mjs`로 기본 밀도에서 마지막 행의 키보드 포커스가 창 하단에 1px 걸리는 경우를 확인했다. 셀의 포커스 표시를 안쪽으로 그리고 스크롤 여백 4px을 적용했다. 편집 셀의 모서리는 둥글어서 경계 검사는 네 변의 양 끝이 실제 셀에 속하는지 확인한다.
+- 최종 밀도 E2E 네 건 모두 1440x900 조회 화면에서 기본 9행(55px), 촘촘하게 15행(34px)이 완전히 보였다. 각 밀도의 이름/입사일/월급/상태 편집기, 방향키로 이동한 마지막 행 및 편집 중 포커스 표시, 초안 유지, 기존 쿠키 호환과 새로고침 복원을 확인했다. [기본 화면](../output/density/라이트-기본.png), [촘촘하게](../output/density/라이트-촘촘하게.png), [편집 셀](../output/density/compact-editor.png), [모바일 설정](../output/density/mobile-settings.png)
+- `pnpm exec playwright test --config output/density/host.config.ts` 첫 실행은 49/52, 최종 빌드 실행은 51/52 통과했다. 실패한 기존 검사들은 로그인 시도 제한 안내가 나타나 업무 화면에 진입하지 못했다. 최종 실행에서 남은 스크롤바 검사 파일을 같은 환경에서 `pnpm exec playwright test scrollbar.spec --config output/density/host.config.ts`로 다시 실행해 2/2 통과했다. [최종 전체 로그](../output/density/e2e-final.log), [스크롤바 재실행](../output/density/scrollbar-rerun.log)
+- 검증 프로젝트 라벨 확인 후 `docker compose -p ax-density-261110 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 전용 컨테이너 2개, 네트워크와 DB 볼륨을 정리했다.

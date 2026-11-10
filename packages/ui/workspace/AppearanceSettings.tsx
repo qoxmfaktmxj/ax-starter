@@ -18,8 +18,9 @@ export function AppearanceSettings() {
     root.dataset.theme = next.theme;
     root.dataset.mode = next.mode;
     root.dataset.agThemeMode = next.mode;
+    root.dataset.density = next.density;
     setChoice(next);
-    const pair = `${appearanceCookie}=${next.theme}.${next.mode}`;
+    const pair = `${appearanceCookie}=${next.theme}.${next.mode}.${next.density}`;
     try {
       document.cookie =
         pair +
@@ -35,8 +36,8 @@ export function AppearanceSettings() {
     <Dialog.Root
       onOpenChange={(open) => {
         if (open) {
-          const { theme, mode } = document.documentElement.dataset;
-          setChoice(readAppearance(`${theme}.${mode}`));
+          const { theme, mode, density } = document.documentElement.dataset;
+          setChoice(readAppearance(`${theme}.${mode}.${density}`));
         }
       }}
     >
@@ -76,6 +77,20 @@ export function AppearanceSettings() {
                   onChange={() => apply({ ...choice, mode })}
                 />
                 {mode === "light" ? "라이트" : "다크"}
+              </label>
+            ))}
+          </fieldset>
+          <fieldset>
+            <legend>표 밀도</legend>
+            {(["default", "compact"] as const).map((density) => (
+              <label key={density}>
+                <input
+                  type="radio"
+                  name="density"
+                  checked={choice.density === density}
+                  onChange={() => apply({ ...choice, density })}
+                />
+                {density === "default" ? "기본" : "촘촘하게"}
               </label>
             ))}
           </fieldset>

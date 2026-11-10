@@ -3,6 +3,7 @@
   --grid-header-height: 40px;
 }
 
+:root[data-density="compact"],
 [data-density="compact"] {
   --grid-row-height: 34px;
   --grid-header-height: 36px;
