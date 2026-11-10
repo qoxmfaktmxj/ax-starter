@@ -7,6 +7,8 @@ description: Add a new business module to this ax-starter repository after the e
 
 먼저 `docs/PROGRESS.md`와 `PRODUCT.md`에서 실제 완료된 Reference 범위를 확인한다. 비교 기준은 `packages/contracts/employees.ts`, `packages/core/authz.ts`, `packages/server/employees/service.ts`, `apps/web/app/api/employees`, `packages/grid/DataGrid.tsx`, `apps/web/app/employees/page.tsx`다. 테스트 위치는 `tests/integration`과 `tests/e2e`다.
 
+화면 구현 전 루트 [DESIGN.md](../../../DESIGN.md)에서 메뉴 A/B, 그리드 개수 또는 비그리드 유형을 정한다. 공통 셸, 입력, 버튼, 내보내기와 실제 템플릿의 경로는 해당 문서를 따른다.
+
 새 업무의 행 식별자, 입력값, 상태, 권한, 감사 대상, 출력 필요 여부를 먼저 확정한다. 사원 필드나 HR 역할을 그대로 복제하지 않는다. 계약은 `packages/contracts`, 정책과 업무 규칙은 `packages/core`, DB와 외부 포트 구현은 `packages/server`, HTTP 연결과 화면은 `apps/web`에 둔다. Worker 작업이 필요하면 `apps/worker`에서 현재 actor를 다시 해석하고 `packages/server`의 공개 서비스를 호출한다.
 
 조회와 저장은 서버 Service에서 기능, 행 범위, 필드 read/write/export를 검사한다. 수정 가능한 행은 rowVersion과 원자적 일괄 저장, 요청 ID 멱등성을 검토한다. 실패 저장은 입력을 유지하고 감사의 commit 의미를 구분한다. 파일과 출력이 필요하면 기존 `FileStorage`와 `ReportRenderer` 계약을 활용하되 새 backend나 서식을 근거 없이 추가하지 않는다. Grid 화면은 `DataGrid`의 업무 중립 props만 사용하고 AG Grid 타입을 화면 밖에 노출하지 않는다.
