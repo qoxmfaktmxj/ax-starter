@@ -1,0 +1,117 @@
+.requestExample h2 {
+  font-size: var(--font-size-lg);
+}
+.requestExample h2 + p,
+.coursePicker p {
+  color: var(--color-text-on-subtle);
+  margin-block: var(--space-2) var(--space-4);
+}
+.workflowSelection {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-4);
+  padding-block: var(--space-3);
+  border-block: 1px solid var(--color-border);
+}
+.workflowSelection dd {
+  margin: 0;
+  font-weight: 600;
+}
+.coursePicker {
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+}
+.coursePicker h2 {
+  margin-top: 0;
+}
+.coursePicker .workField label {
+  display: grid;
+  gap: var(--space-1);
+}
+.courseOptions {
+  min-width: 0;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  border: 0;
+}
+.courseOptions legend {
+  margin-bottom: var(--space-2);
+  font-weight: 600;
+}
+.courseOptions > div {
+  max-height: min(34dvh, 260px);
+  overflow: auto;
+  border-block: 1px solid var(--color-border);
+}
+.courseOptions label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  min-height: var(--control-large);
+  cursor: pointer;
+}
+.courseOptions label:has(:checked) {
+  background: var(--work-selection);
+}
+.courseOptions input {
+  accent-color: var(--color-action);
+}
+.courseOptions label span {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.courseOptions input:focus-visible {
+  outline-offset: 1px;
+}
+.requestExample form {
+  display: grid;
+  gap: var(--space-2);
+}
+.requestExample textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  resize: vertical;
+}
+.requestExample [aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+.requestActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.requestCourse {
+  min-width: 0;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  border: 0;
+}
+.requestCourse legend,
+.requestExample label,
+.requestReview dt {
+  font-weight: 600;
+}
+.requestCourse legend {
+  margin-bottom: var(--space-2);
+}
+.requestCourse > span {
+  margin-inline-end: var(--space-3);
+}
+.requestExample .requestFieldError {
+  color: var(--color-danger);
+}
+.requestReview dd {
+  margin: var(--space-1) 0 var(--space-4);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -78,6 +78,37 @@ export const employees = pgTable(
   ],
 );
 
+export const educationCourses = pgTable("education_courses", {
+  id: varchar("id", { length: 20 }).primaryKey(),
+  code: varchar("code", { length: 20 }).notNull().unique(),
+  name: varchar("name", { length: 120 }).notNull(),
+});
+
+export const educationDrafts = pgTable(
+  "education_drafts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => appUsers.id),
+    courseId: varchar("course_id", { length: 20 }).references(
+      () => educationCourses.id,
+    ),
+    reason: text("reason").notNull(),
+    rowVersion: integer("row_version").notNull().default(1),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("education_drafts_owner_updated_idx").on(
+      table.ownerId,
+      table.updatedAt,
+      table.id,
+    ),
+  ],
+);
+
 export const commandResults = pgTable(
   "command_results",
   {

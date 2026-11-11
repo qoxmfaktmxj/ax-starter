@@ -1,15 +1,15 @@
-import { useId, useRef, useState, type Ref } from "react";
-import { Dialog } from "@base-ui/react/dialog";
-import {
-  ActionButton,
-  TextField,
-} from "../../../../packages/ui/workspace/Workspace";
+import { useState } from "react";
+import type { EducationCourse } from "../../../../packages/contracts/education-requests";
+import { CoursePickerDialog } from "../my-requests/CoursePickerDialog";
+import { EducationDraftForm } from "../my-requests/EducationDraftForm";
 import "./workflow-examples.css";
 
-type Course = { id: string; code: string; name: string };
-
-export function CoursePickerExample({ courses }: { courses: Course[] }) {
-  const [course, setCourse] = useState<Course>();
+export function CoursePickerExample({
+  courses,
+}: {
+  courses: EducationCourse[];
+}) {
+  const [course, setCourse] = useState<EducationCourse>();
   return (
     <section
       className="workReading workflowExample"
@@ -30,206 +30,23 @@ export function CoursePickerExample({ courses }: { courses: Course[] }) {
   );
 }
 
-export function CoursePickerDialog({
+export function EducationRequestExample({
   courses,
-  value,
-  onApply,
-  triggerRef,
-  error,
 }: {
-  courses: Course[];
-  value?: Course;
-  onApply: (course: Course) => void;
-  triggerRef?: Ref<HTMLButtonElement>;
-  error?: string;
+  courses: EducationCourse[];
 }) {
-  const errorId = useId();
-  const [candidateId, setCandidateId] = useState("");
-  const [query, setQuery] = useState("");
-  const term = query.trim().toLowerCase();
-  const matches = courses.filter(
-    (item) =>
-      item.name.includes(term) || item.code.toLowerCase().includes(term),
-  );
-  const candidate = matches.find((item) => item.id === candidateId);
-
+  const [draft, setDraft] = useState<{
+    courseId: string | null;
+    reason: string;
+  }>({ courseId: null, reason: "" });
   return (
-    <Dialog.Root
-      onOpenChange={(open) => {
-        if (open) {
-          setCandidateId(value?.id ?? "");
-          setQuery("");
-        }
-      }}
-    >
-      <Dialog.Trigger
-        ref={triggerRef}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : undefined}
-        render={<ActionButton />}
-      >
-        과정 찾기
-      </Dialog.Trigger>
-      {error && (
-        <p className="requestFieldError" id={errorId} role="alert">
-          {error}
-        </p>
-      )}
-      <Dialog.Portal>
-        <Dialog.Backdrop className="workspaceModalBackdrop" />
-        <Dialog.Popup className="workspaceModalPopup coursePicker">
-          <Dialog.Title>교육 과정 찾기</Dialog.Title>
-          <Dialog.Description>
-            과정을 고른 뒤 ‘선택 적용’을 누르세요.
-          </Dialog.Description>
-          <TextField
-            label="과정 검색"
-            type="search"
-            placeholder="과정명 또는 코드"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <fieldset className="courseOptions">
-            <legend>검색 결과 {matches.length}건</legend>
-            <div>
-              {matches.map((item) => (
-                <label key={item.id}>
-                  <input
-                    type="radio"
-                    name="example-course"
-                    checked={candidateId === item.id}
-                    onChange={() => setCandidateId(item.id)}
-                  />
-                  <span>{item.code}</span> {item.name}
-                </label>
-              ))}
-              {matches.length === 0 && (
-                <p role="status">
-                  일치하는 과정이 없습니다. 검색어를 바꿔 주세요.
-                </p>
-              )}
-            </div>
-          </fieldset>
-          <div className="workspaceModalActions">
-            <Dialog.Close>취소</Dialog.Close>
-            <Dialog.Close
-              className="primary"
-              disabled={!candidate}
-              onClick={() => {
-                if (candidate) onApply(candidate);
-              }}
-            >
-              선택 적용
-            </Dialog.Close>
-          </div>
-        </Dialog.Popup>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
-
-export function EducationRequestExample({ courses }: { courses: Course[] }) {
-  const [course, setCourse] = useState<Course>();
-  const [reason, setReason] = useState("");
-  const [reviewing, setReviewing] = useState(false);
-  const [attempted, setAttempted] = useState(false);
-  const courseButton = useRef<HTMLButtonElement>(null);
-  const reasonInput = useRef<HTMLTextAreaElement>(null);
-  const heading = useRef<HTMLHeadingElement>(null);
-  const reasonId = useId();
-  const reasonError = attempted && !reason.trim();
-
-  function showReview(next: boolean) {
-    setReviewing(next);
-    requestAnimationFrame(() => heading.current?.focus());
-  }
-
-  return (
-    <section
-      className="workReading workflowExample requestExample"
-      aria-labelledby="education-request-title"
-    >
-      <h2 id="education-request-title" tabIndex={-1} ref={heading}>
-        {reviewing ? "교육 신청서 검토" : "교육 신청서 작성"}
-      </h2>
-      <p>
-        가상 교육 과정의 신청서 예시입니다. 입력한 내용은 이 화면에서만
-        사용합니다.
-      </p>
-      <dl className="workflowSelection">
-        <dt>신청자</dt>
-        <dd>가상 신청자 A</dd>
-      </dl>
-      {reviewing && course ? (
-        <>
-          <dl className="requestReview">
-            <dt>교육 과정</dt>
-            <dd>
-              {course.code} / {course.name}
-            </dd>
-            <dt>신청 사유</dt>
-            <dd>{reason}</dd>
-          </dl>
-          <ActionButton onClick={() => showReview(false)}>
-            다시 수정
-          </ActionButton>
-        </>
-      ) : (
-        <form
-          noValidate
-          onSubmit={(event) => {
-            event.preventDefault();
-            setAttempted(true);
-            if (!course) {
-              courseButton.current?.focus();
-              return;
-            }
-            if (!reason.trim()) {
-              reasonInput.current?.focus();
-              return;
-            }
-            showReview(true);
-          }}
-        >
-          <fieldset className="requestCourse">
-            <legend>교육 과정 (필수)</legend>
-            <span>{course ? `${course.code} / ${course.name}` : "미선택"}</span>
-            <CoursePickerDialog
-              courses={courses}
-              value={course}
-              onApply={setCourse}
-              triggerRef={courseButton}
-              error={
-                attempted && !course ? "교육 과정을 선택하세요." : undefined
-              }
-            />
-          </fieldset>
-          <label htmlFor={reasonId}>신청 사유 (필수)</label>
-          <textarea
-            id={reasonId}
-            ref={reasonInput}
-            rows={4}
-            value={reason}
-            required
-            aria-invalid={reasonError || undefined}
-            aria-describedby={reasonError ? reasonId + "-error" : undefined}
-            onChange={(event) => setReason(event.target.value)}
-          />
-          {reasonError && (
-            <p
-              className="requestFieldError"
-              role="alert"
-              id={reasonId + "-error"}
-            >
-              신청 사유를 입력하세요.
-            </p>
-          )}
-          <ActionButton primary type="submit">
-            검토하기
-          </ActionButton>
-        </form>
-      )}
-    </section>
+    <EducationDraftForm
+      example
+      courses={courses}
+      applicant="가상 신청자 A"
+      {...draft}
+      onChange={(courseId, reason) => setDraft({ courseId, reason })}
+    />
   );
 }
 

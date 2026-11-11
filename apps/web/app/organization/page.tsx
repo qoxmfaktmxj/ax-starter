@@ -418,6 +418,15 @@ export default function OrganizationPage() {
             if (!busy) reload();
           },
         },
+        ...(me.permissions.includes("education.draft")
+          ? [
+              {
+                label: "내 신청함",
+                icon: "inbox" as const,
+                onSelect: () => window.location.assign("/my-requests"),
+              },
+            ]
+          : []),
         ...(me.permissions.includes("audit.read")
           ? [
               {

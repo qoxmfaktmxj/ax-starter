@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useState } from "react";
+import { exampleEducationCourses as courses } from "../../../../packages/contracts/education-requests";
 import { Tabs } from "@base-ui/react/tabs";
 import { ComponentCatalog } from "./ComponentCatalog";
 import {
@@ -35,15 +36,6 @@ type PanelData = {
   labels: [string, string];
   rows: ExampleRow[];
 };
-const courses = Array.from({ length: 24 }, (_, i) => ({
-  id: String(i + 1),
-  code: "ED-" + String(i + 1).padStart(3, "0"),
-  name:
-    ["서비스 기획", "데이터 분석", "고객 응대", "프로젝트 관리"][i % 4] +
-    " " +
-    (Math.floor(i / 4) + 1) +
-    "차",
-}));
 const descriptions = [
   "",
   "과정을 선택하면 교육 일정이 열립니다.",
@@ -146,6 +138,7 @@ function CourseDetailTabs({
 }
 
 const permissionNames: Record<Permission, string> = {
+  "education.draft": "교육 신청 초안",
   "org.manage": "인사/조직 기준정보 관리",
   "emp.read": "사원 조회",
   "emp.create": "사원 추가",
@@ -337,6 +330,15 @@ export default function DesignSystemPage() {
           icon: "user",
           onSelect: () => window.location.assign("/organization"),
         },
+        ...(me.permissions.includes("education.draft")
+          ? [
+              {
+                label: "내 신청함",
+                icon: "inbox" as const,
+                onSelect: () => window.location.assign("/my-requests"),
+              },
+            ]
+          : []),
         ...(me.permissions.includes("audit.read")
           ? [
               {

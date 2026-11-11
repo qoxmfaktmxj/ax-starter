@@ -1,6 +1,6 @@
 # 공통 신청서 실행 계획
 
-[신청서 설계안](../specs/2026-11-11-request-form.md)의 후속 계획이다. 아래 경로는 교육 모듈 구현 시 생성하거나 확장할 대상이다.
+[신청서 설계안](../specs/2026-11-11-request-form.md)의 단계별 계획이다. 1단계 작성/검토 예시와 2단계 ‘내 신청함’의 초안 저장/재열기를 구현했다. 다음 단계는 실제 제출과 접수 상세다.
 
 1. **작성과 검토 예시** (AC1, AC2의 화면 부분, AC6). `apps/web/app/design-system/`에서 가상 과정, 사유 입력, 읽기 전용 검토, 수정 복귀를 연결한다. 과정 선택 팝업의 적용/취소와 Base UI 포커스 복원 방식을 재사용한다. 브라우저 E2E로 키보드와 모바일 입력 보존을 확인한다.
 2. **본인 초안 저장/조회** (AC2, AC5). `packages/contracts`, `packages/core`, `packages/server/db`, `packages/server`에 교육 신청 타입, 권한, 마이그레이션과 Service를 추가하고 `apps/web/app/api`와 ‘내 신청’ 화면을 연결한다. 격리 PostgreSQL 통합 검사로 타인 접근 거부와 rowVersion 충돌을 확인한다.

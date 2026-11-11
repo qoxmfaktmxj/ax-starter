@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 const paths = {
+  inbox: <path d="M3 14 6 5h12l3 9v5H3zm0 0h5l2 2h4l2-2h5" />,
   appearance: (
     <>
       <circle cx="12" cy="12" r="8" />

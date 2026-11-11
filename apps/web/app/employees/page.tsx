@@ -64,6 +64,7 @@ type LeaveAction =
   | "batch-edit"
   | "audit"
   | "organization"
+  | "requests"
   | "templates"
   | "logout";
 
@@ -494,6 +495,7 @@ export default function EmployeesPage() {
       });
       setRefresh((value) => value + 1);
     } else if (action === "audit") window.location.assign("/audit");
+    else if (action === "requests") window.location.assign("/my-requests");
     else if (action === "organization") window.location.assign("/organization");
     else if (action === "templates") window.location.assign("/design-system");
     else if (action === "logout")
@@ -877,6 +879,15 @@ export default function EmployeesPage() {
           icon: "user",
           onSelect: () => requestAction("organization"),
         },
+        ...(me.permissions.includes("education.draft")
+          ? [
+              {
+                label: "내 신청함",
+                icon: "inbox" as const,
+                onSelect: () => requestAction("requests"),
+              },
+            ]
+          : []),
         ...(me.permissions.includes("audit.read")
           ? [
               {

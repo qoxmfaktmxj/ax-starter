@@ -1,10 +1,12 @@
 import { eq } from "drizzle-orm";
+import { exampleEducationCourses } from "../packages/contracts/education-requests";
 import { hashPassword } from "better-auth/crypto";
 import { account, user } from "../packages/server/auth/auth-schema";
 import { PASSWORD_ISSUER } from "../packages/server/auth/context";
 import { db, pool } from "../packages/server/db";
 import {
   appUsers,
+  educationCourses,
   employees,
   organizations,
 } from "../packages/server/db/schema";
@@ -50,6 +52,10 @@ const fixtureEmployees: Record<string, string> = {
 try {
   const passwordHash = await hashPassword(fixturePassword);
   await db.transaction(async (tx) => {
+    await tx
+      .insert(educationCourses)
+      .values(exampleEducationCourses)
+      .onConflictDoNothing();
     const insertedOrganizations = await tx
       .insert(organizations)
       .values([

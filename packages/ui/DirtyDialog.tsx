@@ -8,12 +8,14 @@ export function DirtyDialog({
   onContinue,
   onDiscard,
   onSave,
+  canSave = true,
 }: {
   open: boolean;
   count: number;
   onContinue: () => void;
   onDiscard: () => void;
   onSave: () => void;
+  canSave?: boolean;
 }) {
   return (
     <Dialog.Root
@@ -34,7 +36,12 @@ export function DirtyDialog({
             <button type="button" onClick={onDiscard}>
               버리고 이동
             </button>
-            <button type="button" className="primary" onClick={onSave}>
+            <button
+              type="button"
+              className="primary"
+              onClick={onSave}
+              disabled={!canSave}
+            >
               저장 후 이동
             </button>
           </div>
