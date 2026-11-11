@@ -610,3 +610,14 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - `pnpm exec playwright test --config output/employee-polish/host.config.ts` 전체 55개 중 54개가 통과했다. 컴포넌트 카탈로그 저장 버튼 검사는 로그인 횟수 제한 안내에서 멈췄고 같은 빌드와 인증 설정으로 해당 검사를 재실행해 통과했다. [전체 로그](../output/employee-polish/e2e.log), [재실행 로그](../output/employee-polish/retry.log)
 - 네 테마와 두 밀도에서 조직 담당자의 실제 사번/이름/조직/재직 조건 제출, 적용 전후 조건 구분, 조회 11건에서 1건으로 축소, E001에서 E002로 상세 교체, 급여 열 권한, 데스크톱 목록과 상세 정렬을 확인했다. 320px에서 상세/목록 링크의 키보드 이동과 가로 넘침을 확인했다. 지연 응답과 HTTP 503에서는 이전 사원의 첨부 작업이 표시되지 않았다. 1440x900 조회형에서 완전히 보이는 행은 기본 9행, 촘촘하게 15행이었다.
 - 작업 전용 프로젝트 라벨을 확인한 뒤 `docker compose -p ax-employee-polish-261111 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 컨테이너 2개, 네트워크와 테스트 DB 볼륨을 제거했다.
+
+## 2026-11-11 업무 화면 템플릿과 공통 신청서 설계
+
+성공 기준은 기존 그리드 1~4개 옆에서 상세 탭, 선택 팝업, 변경 전후 비교를 실행하고 교육 신청을 첫 사례로 하는 공통 신청서의 구현 경계와 인수 기준을 정하는 것이다.
+
+- 화면 템플릿을 ‘목록 배치’와 ‘입력과 검토’로 정리했다. 기준 과정 변경 시 첫 상세 탭을 복원하고, 과정 선택 팝업은 적용한 값만 부모 화면에 전달한다. 변경 비교에서 수정한 항목만 볼 수 있다. 예시는 브라우저의 가상 데이터를 사용한다. [선택 기준](../DESIGN.md#업무-템플릿-선택-기준)
+- [신청서 설계안](superpowers/specs/2026-11-11-request-form.md)과 [실행 계획](superpowers/plans/2026-11-11-request-form.md)에 본인 초안, 입력/검토, 실제 접수, 재시도/충돌/권한 기준과 미확정 운영 정책을 기록했다. 이번 변경은 신청 Service/API/DB 구현을 포함하지 않는다. Python으로 설계 문서의 로컬 링크를 확인했다.
+- 전용 PostgreSQL/OIDC 환경에서 `pnpm migrate`, `pnpm seed` 성공. 최종 `pnpm check` 통과, 경계 검사 71개 소스. `pnpm test` 단위 41개 통과, test 프로필 호스트 `pnpm build` 성공. [빌드 로그](../output/workflow-templates/build.log)
+- `pnpm exec playwright test --config output/workflow-templates/host.config.ts workflow-templates workspace-system appearance status-badge text-field` 관련 브라우저 테스트 16개 통과. 8개 테마/밀도 조합에서 기존 그리드와 상세 탭의 기준 행 변경, 팝업 검색 0건/선택 적용/Escape 취소, 변경 항목 필터를 확인했다. 320px에서 대화상자 폭, Tab 포커스 유지, 닫은 뒤 실행 버튼 복원도 검증했다. [검사 로그](../output/workflow-templates/final-e2e.log)
+- `node output/workflow-templates/capture.mjs`로 최종 [상세 탭](../output/workflow-templates/course-tabs.png), [변경 비교](../output/workflow-templates/comparison.png), [모바일 팝업](../output/workflow-templates/mobile-picker.png)을 캡처했다.
+- 전용 프로젝트 라벨을 확인한 뒤 `docker compose -p ax-templates-261111 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 컨테이너 2개, 네트워크, 테스트 DB 볼륨을 정리했다.

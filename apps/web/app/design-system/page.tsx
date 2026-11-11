@@ -2,6 +2,7 @@
 import { useCallback, useState } from "react";
 import { Tabs } from "@base-ui/react/tabs";
 import { ComponentCatalog } from "./ComponentCatalog";
+import { ChangeReviewExample, CoursePickerExample } from "./WorkflowExamples";
 import { authClient } from "../../auth-client";
 import {
   DataGrid,
@@ -94,6 +95,52 @@ function ExampleGrid({
     </GridPanel>
   );
 }
+function CourseDetailTabs({
+  course,
+  panels,
+}: {
+  course: ExampleRow;
+  panels: PanelData[];
+}) {
+  return (
+    <Tabs.Root className="courseDetailTabs" defaultValue={panels[0].title}>
+      <h2>
+        {course.code} / {course.name}
+      </h2>
+      <Tabs.List className="workExamples" aria-label="선택 과정 상세">
+        {panels.map((panel) => (
+          <Tabs.Tab key={panel.title} value={panel.title}>
+            {panel.title}
+          </Tabs.Tab>
+        ))}
+      </Tabs.List>
+      {panels.map((panel) => (
+        <Tabs.Panel key={panel.title} value={panel.title}>
+          <table aria-label={panel.title}>
+            <thead>
+              <tr>
+                {panel.labels.map((label) => (
+                  <th key={label} scope="col">
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {panel.rows.map((item) => (
+                <tr key={item.id}>
+                  <th scope="row">{item.code}</th>
+                  <td>{item.name}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Tabs.Panel>
+      ))}
+    </Tabs.Root>
+  );
+}
+
 const permissionNames: Record<Permission, string> = {
   "emp.read": "사원 조회",
   "emp.create": "사원 추가",
@@ -208,9 +255,9 @@ export default function DesignSystemPage() {
   const [layout, setLayout] = useState<MenuLayout>("side");
   const [section, setSection] = useState("templates");
   const [count, setCount] = useState(1);
-  const [view, setView] = useState<"grids" | "permissions" | "settings">(
-    "grids",
-  );
+  const [view, setView] = useState<
+    "grids" | "permissions" | "settings" | "tabs" | "picker" | "compare"
+  >("grids");
   const [draft, setDraft] = useState("");
   const [rows, setRows] = useState(courses);
   const [selected, setSelected] = useState<string | null>(null);
@@ -228,6 +275,7 @@ export default function DesignSystemPage() {
         {authError && <a href="/login">로그인으로 이동</a>}
       </main>
     );
+  const showingList = view === "grids" || view === "tabs";
   const course = rows.find((item) => item.id === selected);
   const details: PanelData[] = [
     {
@@ -288,7 +336,7 @@ export default function DesignSystemPage() {
           active: true,
           onSelect: () => {
             setSection("templates");
-            if (view !== "grids") setSelected(null);
+            if (!showingList) setSelected(null);
             setView("grids");
           },
         },
@@ -324,31 +372,50 @@ export default function DesignSystemPage() {
         </Tabs.Panel>
         <Tabs.Panel value="templates">
           <nav className="templateChoices" aria-label="화면 유형">
-            {[1, 2, 3, 4].map((n) => (
+            <div role="group" aria-label="목록 배치">
+              <span>목록 배치</span>
+              {[1, 2, 3, 4].map((n) => (
+                <button
+                  key={n}
+                  aria-pressed={view === "grids" && count === n}
+                  onClick={() => {
+                    if (!showingList) setSelected(null);
+                    setView("grids");
+                    setCount(n);
+                  }}
+                >
+                  그리드 {n}개
+                </button>
+              ))}
               <button
-                key={n}
-                aria-pressed={view === "grids" && count === n}
+                aria-pressed={view === "tabs"}
                 onClick={() => {
-                  if (view !== "grids") setSelected(null);
-                  setView("grids");
-                  setCount(n);
+                  if (!showingList) setSelected(null);
+                  setView("tabs");
                 }}
               >
-                그리드 {n}개
+                목록과 상세 탭
               </button>
-            ))}
-            <button
-              aria-pressed={view === "settings"}
-              onClick={() => setView("settings")}
-            >
-              입력 폼
-            </button>
-            <button
-              aria-pressed={view === "permissions"}
-              onClick={() => setView("permissions")}
-            >
-              내 권한
-            </button>
+            </div>
+            <div role="group" aria-label="입력과 검토">
+              <span>입력과 검토</span>
+              {(
+                [
+                  ["settings", "입력 폼"],
+                  ["picker", "선택 팝업"],
+                  ["compare", "변경 비교"],
+                  ["permissions", "내 권한"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  aria-pressed={view === value}
+                  onClick={() => setView(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </nav>
           {view === "settings" ? (
             <SettingsExample
@@ -360,12 +427,19 @@ export default function DesignSystemPage() {
                 setRevision((v) => v + 1);
               }}
             />
+          ) : view === "picker" ? (
+            <CoursePickerExample courses={courses} />
+          ) : view === "compare" ? (
+            <ChangeReviewExample />
           ) : view === "permissions" ? (
             <PermissionSummary me={me} />
           ) : (
             <>
               <p className="workTemplateNote">
-                교육 업무 예시 데이터입니다. {descriptions[count - 1]}
+                교육 업무 예시 데이터입니다.{" "}
+                {view === "tabs"
+                  ? "과정을 선택한 뒤 상세 탭을 전환하세요."
+                  : descriptions[count - 1]}
               </p>
               <SearchPanel
                 aria-label="예시 과정 검색"
@@ -400,22 +474,38 @@ export default function DesignSystemPage() {
                   }}
                   onSelect={(ids) => setSelected(ids[0] ?? null)}
                 />
-                {details.slice(0, count - 1).map((panel) =>
+                {view === "tabs" ? (
                   course ? (
-                    <ExampleGrid
-                      key={course.id + panel.title}
-                      panel={{
-                        ...panel,
-                        title: course.code + " " + panel.title,
-                      }}
+                    <CourseDetailTabs
+                      key={course.id}
+                      course={course}
+                      panels={details}
                     />
                   ) : (
-                    <GridPanel key={panel.title} title={panel.title}>
+                    <GridPanel title="과정 상세">
                       <p className="workEmpty">
                         교육 과정에서 행을 선택하세요.
                       </p>
                     </GridPanel>
-                  ),
+                  )
+                ) : (
+                  details.slice(0, count - 1).map((panel) =>
+                    course ? (
+                      <ExampleGrid
+                        key={course.id + panel.title}
+                        panel={{
+                          ...panel,
+                          title: course.code + " " + panel.title,
+                        }}
+                      />
+                    ) : (
+                      <GridPanel key={panel.title} title={panel.title}>
+                        <p className="workEmpty">
+                          교육 과정에서 행을 선택하세요.
+                        </p>
+                      </GridPanel>
+                    ),
+                  )
                 )}
               </GridLayout>
             </>
