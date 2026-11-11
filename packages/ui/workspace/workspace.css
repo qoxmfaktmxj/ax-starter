@@ -830,14 +830,10 @@ body:has(.workspaceShell) {
 .workReading h2 {
   font-size: 18px;
 }
-.fieldExample,
-.badgeExample {
-  margin-top: var(--space-4);
-}
 .badgeExample table {
   margin-top: var(--space-4);
 }
-.fieldExample h2 + p {
+.fieldExample header + p {
   margin-top: var(--space-2);
   color: var(--color-text-on-subtle);
 }

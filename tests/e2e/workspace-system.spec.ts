@@ -12,6 +12,23 @@ test("the component catalog shows three save states in all four themes", async (
   await page.keyboard.press("ArrowRight");
   await componentTab.press("Enter");
   const panel = page.getByRole("tabpanel", { name: "컴포넌트" });
+  const index = panel.getByRole("navigation", { name: "컴포넌트 목록" });
+  const fieldChoice = index.getByRole("button", { name: "입력 필드" });
+  await fieldChoice.focus();
+  await page.keyboard.press("Enter");
+  await expect(fieldChoice).toHaveAttribute("aria-pressed", "true");
+  const field = panel
+    .getByRole("textbox", { name: "사번", exact: true })
+    .first();
+  await field.fill("E012");
+  await index.getByRole("button", { name: "상태 배지" }).press("Space");
+  await expect(field).toHaveCount(0);
+  await expect(
+    panel.getByRole("table", { name: "사원 상태별 그리드 표시" }),
+  ).toBeVisible();
+  await fieldChoice.press("Enter");
+  await expect(field).toHaveValue("E012");
+  await index.getByRole("button", { name: "저장 버튼" }).press("Enter");
   const ready = panel.getByRole("button", { name: "저장 1건" });
   const pending = panel.getByRole("button", { name: "저장 중" });
   const disabled = panel.getByRole("button", { name: "저장 0건" });
@@ -31,6 +48,13 @@ test("the component catalog shows three save states in all four themes", async (
       await expect(pending).toBeDisabled();
       await expect(pending).toHaveAttribute("aria-busy", "true");
       await expect(disabled).toBeDisabled();
+      const activeChoice = index.getByRole("button", {
+        name: "저장 버튼",
+        pressed: true,
+      });
+      expect(await activeChoice.evaluate(textContrast)).toBeGreaterThanOrEqual(
+        4.5,
+      );
       for (const button of [ready, pending, disabled]) {
         expect(await button.evaluate(textContrast)).toBeGreaterThanOrEqual(4.5);
       }

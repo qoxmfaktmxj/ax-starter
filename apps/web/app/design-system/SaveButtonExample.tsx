@@ -14,7 +14,10 @@ export function SaveButtonExample() {
       className="workReading saveExample"
       aria-labelledby="save-example-title"
     >
-      <h2 id="save-example-title">저장 버튼</h2>
+      <header className="specimenHeading">
+        <h2 id="save-example-title">저장 버튼</h2>
+        <code>SaveButton</code>
+      </header>
       <p>기본 버튼을 눌러 예시 1건의 저장 과정을 확인하세요.</p>
       <dl>
         <div>

@@ -588,3 +588,14 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - `pnpm exec playwright test --config output/contrast-grid/host.config.ts`로 전체 파일을 두 그룹으로 실행했다. 첫 그룹은 19/19, 둘째 그룹은 33/34 통과했다. 사원 상세 전환 테스트 1건은 로그인 횟수 제한 안내에서 멈췄다. 같은 빌드와 인증 설정에서 해당 테스트와 실행 취소/다시 실행 검증을 보강한 상태 중첩 테스트를 재실행해 2/2 통과했다. [컴포넌트 검사](../output/contrast-grid/e2e-components.log), [업무 검사](../output/contrast-grid/e2e-workspace.log), [최종 재검사](../output/contrast-grid/final-check.log)
 - 중첩 테스트에서 두 필드의 실제 422 응답을 사용해 8개 조합의 선택, 포커스, 오류 문구 및 편집 공간을 확인했다. 오류 문구 대비 4.5:1 이상, 포커스 대비 3:1 이상을 검증했고 강제 색상에서 체크박스를 해제/재선택했다. 한 필드만 수정하면 다른 필드의 오류가 유지되며 실행 취소/다시 실행 시 표시도 현재 값에 맞게 복원됐다.
 - 전용 프로젝트 라벨을 확인한 뒤 `docker compose -p ax-contrast-261110 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 컨테이너 2개, 네트워크와 테스트 DB 볼륨을 제거했다.
+
+## 2026-11-11 디자인 스킬 설치와 컴포넌트 탐색 개선
+
+성공 기준은 두 스킬의 원본 설치를 확인하고, 컴포넌트 탭에서 저장 버튼/입력 필드/상태 배지를 키보드와 작은 화면으로 바로 선택하며 입력값과 기존 테마별 동작을 유지하는 것이다.
+
+- skill-installer의 `install-skill-from-github.py`로 사용자 Codex 스킬 폴더에 [Astryx](https://github.com/meta/astryx/tree/f810d1ad67495505eed7ed37ff1a65322c885dc2/plugins/astryx/skills/astryx)와 Damir Sokolovsky의 [unslop](https://github.com/heydamir/unslop/tree/97daa3eb365670ea3f87ed85356cbfcee18105a5/skills/unslop)을 설치했다. GitHub 트리와 로컬 스킬의 파일 목록과 Git blob 해시가 각각 1개, 14개 일치했다.
+- `npm install --global @astryxdesign/cli@0.7.13` 성공. CLI 검색과 SideNav/SegmentedControl 문서로 탐색과 단일 선택의 용도를 확인했다. 앱에서는 기존 AX Starter 공통 UI와 역할 토큰을 사용했다.
+- `node output/catalog-polish/capture.mjs before`로 1440px와 320px 화면에서 예시가 세로로 쌓여 아래 항목을 찾기 어려운 점을 확인했다. 목록과 선택한 예시를 한 영역에 배치하고, 좁은 화면에서는 목록을 위로 옮겼다. 항목을 전환해도 같은 탭의 예시 상태는 유지한다. [개선 전](../output/catalog-polish/before-desktop.png), [개선 후](../output/catalog-polish/after-desktop.png), [모바일](../output/catalog-polish/after-mobile.png)
+- 전용 PostgreSQL/OIDC에서 `pnpm migrate`, `pnpm seed` 성공. 테스트 파일 두 개의 포맷을 정리한 뒤 최종 `pnpm check` 통과, 아키텍처 70개 소스. `pnpm test` 단위 41개 통과. 호스트 test 프로필 `pnpm build` 성공. [빌드 로그](../output/catalog-polish/build.log)
+- `pnpm exec playwright test --config output/catalog-polish/host.config.ts workspace-system text-field status-badge appearance` 관련 브라우저 테스트 14개 통과. Enter/Space로 항목을 바꾸고 돌아왔을 때 사번 입력값 유지, 네 테마에서 선택 항목의 글자 대비 4.5:1 이상과 기존 예시 동작을 검증했다. `node output/catalog-polish/capture.mjs after`로 모바일 가로 넘침 없음과 최종 화면을 확인했다. [검사 로그](../output/catalog-polish/e2e-final.log)
+- 전용 프로젝트 라벨 확인 후 `docker compose -p ax-catalog-polish-261111 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 컨테이너 2개, 네트워크, 테스트 DB 볼륨을 제거했다.

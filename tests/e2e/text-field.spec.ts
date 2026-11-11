@@ -26,6 +26,9 @@ for (const theme of ["cobalt", "isu"]) {
       ).toBeVisible();
       await page.getByRole("button", { name: "디자인 시스템" }).click();
       await page.getByRole("tab", { name: "컴포넌트" }).click();
+      await page
+        .getByRole("button", { name: "입력 필드", exact: true })
+        .click();
       const root = page.locator("html");
       await expect(root).toHaveAttribute("data-theme", theme);
       await expect(root).toHaveAttribute("data-mode", mode);

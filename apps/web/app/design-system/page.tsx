@@ -1,9 +1,7 @@
 "use client";
 import { useCallback, useState } from "react";
 import { Tabs } from "@base-ui/react/tabs";
-import { SaveButtonExample } from "./SaveButtonExample";
-import { TextFieldExample } from "./TextFieldExample";
-import { EmployeeStatusBadge } from "../../../../packages/ui/workspace/EmployeeStatusBadge";
+import { ComponentCatalog } from "./ComponentCatalog";
 import { authClient } from "../../auth-client";
 import {
   DataGrid,
@@ -322,32 +320,7 @@ export default function DesignSystemPage() {
           <Tabs.Tab value="components">컴포넌트</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="components">
-          <SaveButtonExample />
-          <TextFieldExample />
-          <section
-            className="workReading badgeExample"
-            aria-labelledby="badge-example-title"
-          >
-            <h2 id="badge-example-title">상태 배지</h2>
-            <table aria-label="사원 상태별 그리드 표시">
-              <thead>
-                <tr>
-                  <th scope="col">상태 코드</th>
-                  <th scope="col">그리드 표시</th>
-                </tr>
-              </thead>
-              <tbody>
-                {["ACTIVE", "LEAVE"].map((status) => (
-                  <tr key={status}>
-                    <th scope="row">{status}</th>
-                    <td>
-                      <EmployeeStatusBadge status={status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
+          <ComponentCatalog />
         </Tabs.Panel>
         <Tabs.Panel value="templates">
           <nav className="templateChoices" aria-label="화면 유형">

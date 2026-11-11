@@ -1,0 +1,106 @@
+.componentCatalog {
+  display: grid;
+  grid-template-columns: clamp(160px, 16vw, 216px) minmax(0, 1fr);
+  max-width: 1120px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+}
+
+.catalogIndex {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  padding: var(--space-6) var(--space-3);
+  border-inline-end: 1px solid var(--color-border);
+}
+
+.catalogIndex h2 {
+  padding: 0 var(--space-3) var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.catalogIndex button {
+  min-height: var(--control-regular);
+  padding-inline: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-on-subtle);
+  text-align: start;
+}
+
+.catalogIndex button[aria-pressed="true"] {
+  box-shadow: inset 3px 0 var(--color-action);
+  background: var(--work-selection);
+  color: var(--color-link);
+  font-weight: 650;
+}
+
+.catalogPreviews {
+  min-width: 0;
+}
+
+.catalogPreviews .workReading {
+  max-width: none;
+  margin: 0;
+  padding: clamp(var(--space-4), 3vw, 40px);
+  border: 0;
+  background: transparent;
+}
+
+.specimenHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+
+.catalogPreviews .specimenHeading h2 {
+  font-size: var(--font-size-title);
+  line-height: 1.35;
+}
+
+.specimenHeading code {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+}
+
+.catalogPreviews .fieldExample input {
+  width: min(100%, 32ch);
+}
+
+@media (max-width: 660px) {
+  .componentCatalog {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .catalogIndex {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: var(--space-2);
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .catalogIndex h2 {
+    display: none;
+  }
+  .catalogIndex button {
+    flex: 1;
+    min-height: var(--control-large);
+    padding-inline: var(--space-1);
+    text-align: center;
+  }
+  .catalogIndex button[aria-pressed="true"] {
+    box-shadow: inset 0 -2px var(--color-action);
+  }
+}
+
+@media (forced-colors: active) {
+  .catalogIndex button[aria-pressed="true"] {
+    border: 2px solid Highlight;
+  }
+}

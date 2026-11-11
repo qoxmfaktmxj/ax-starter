@@ -8,10 +8,11 @@ export function TextFieldExample() {
       className="workReading fieldExample"
       aria-labelledby="field-example-title"
     >
-      <h2 id="field-example-title">입력 필드</h2>
-      <p>
-        사원관리의 사번 검색 필드입니다. Tab 키로 이동하거나 값을 수정해 보세요.
-      </p>
+      <header className="specimenHeading">
+        <h2 id="field-example-title">입력 필드</h2>
+        <code>TextField</code>
+      </header>
+      <p>사원관리에서 사용하는 사번 검색 필드입니다.</p>
       <dl>
         <div>
           <dt>기본</dt>
@@ -25,7 +26,7 @@ export function TextFieldExample() {
             <TextField
               label="사번"
               defaultValue="E001"
-              hint="이 필드로 이동하면 포커스 테두리가 표시됩니다."
+              hint="Tab 키로 이동해 포커스 테두리를 확인하세요."
             />
           </dd>
         </div>
