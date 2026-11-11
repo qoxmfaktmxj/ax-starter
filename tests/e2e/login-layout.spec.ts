@@ -21,7 +21,10 @@ test("login form keeps keyboard order and submits with Enter", async ({
   await username.fill("hr-admin");
   await password.fill(fixturePassword());
   await password.press("Enter");
-  await page.waitForURL("**/employees");
+  await expect(page).toHaveURL("/");
+  await expect(
+    page.getByRole("heading", { name: "홈", exact: true }),
+  ).toBeVisible();
 });
 
 for (const viewport of [

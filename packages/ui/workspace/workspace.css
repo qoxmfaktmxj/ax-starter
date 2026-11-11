@@ -32,8 +32,13 @@ body:has(.workspaceShell) {
   display: grid;
   place-items: center;
   color: var(--color-text);
+  text-decoration: none;
   width: 100%;
   border-bottom: 1px solid var(--color-border);
+}
+.workspaceBrand:hover,
+.workspaceBrand[aria-current="page"] {
+  color: var(--color-link);
 }
 .workspaceRail nav {
   display: grid;

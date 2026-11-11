@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { signInWithPassword } from "./login";
+import { signInToEmployees } from "./login";
 import { textContrast } from "./text-contrast";
 
 test("appearance choices update the grid without losing selection and survive navigation", async ({
   page,
 }) => {
-  await signInWithPassword(page, "hr-admin");
+  await signInToEmployees(page, "hr-admin");
   const root = page.locator("html");
   const settings = page.getByRole("button", { name: "화면 설정" });
   await expect(root).toHaveAttribute("data-theme", "cobalt");
@@ -76,7 +76,7 @@ test("mobile keyboard settings preserve the edit and recover from an invalid pre
   await context.addCookies([
     { name: "ax-appearance", value: "isu.invalid", url: baseURL! },
   ]);
-  await signInWithPassword(page, "hr-admin");
+  await signInToEmployees(page, "hr-admin");
   await page.getByRole("button", { name: "일괄편집" }).click();
   await page
     .getByRole("gridcell", { name: "가상사원01", exact: true })

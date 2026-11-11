@@ -3,6 +3,7 @@ import {
   integer,
   jsonb,
   numeric,
+  pgEnum,
   pgTable,
   primaryKey,
   text,
@@ -14,6 +15,7 @@ import {
   bigint,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { homeModes } from "../../contracts/home";
 
 export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -26,6 +28,8 @@ export const organizations = pgTable("organizations", {
   rowVersion: integer("row_version").notNull().default(1),
 });
 
+export const homeModeEnum = pgEnum("home_mode", homeModes);
+
 export const appUsers = pgTable(
   "app_users",
   {
@@ -37,6 +41,7 @@ export const appUsers = pgTable(
     active: integer("active").notNull().default(1),
     roleCode: varchar("role_code", { length: 30 }).notNull(),
     dataScope: varchar("data_scope", { length: 20 }).notNull(),
+    homeMode: homeModeEnum("home_mode").notNull().default("work"),
     authzVersion: integer("authz_version").notNull().default(1),
     rowVersion: integer("row_version").notNull().default(1),
   },

@@ -1,13 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { signInWithPassword } from "./login";
+import { signInToEmployees, signInWithPassword } from "./login";
 
 const INVALID = "아이디 또는 비밀번호가 올바르지 않습니다.";
 
 test("hr-admin signs in with a password and sees 24 employees with salary", async ({
   page,
 }) => {
-  await signInWithPassword(page, "hr-admin");
-  await page.waitForURL("**/employees");
+  await signInToEmployees(page, "hr-admin");
   await expect(page.getByText("전체 24건")).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "월급" })).toBeVisible();
 });
@@ -15,8 +14,7 @@ test("hr-admin signs in with a password and sees 24 employees with salary", asyn
 test("org-manager signs in with a password and sees 12 employees without salary", async ({
   page,
 }) => {
-  await signInWithPassword(page, "org-manager");
-  await page.waitForURL("**/employees");
+  await signInToEmployees(page, "org-manager");
   await expect(page.getByText("전체 12건")).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "월급" })).toHaveCount(0);
 });
@@ -41,7 +39,7 @@ test("inactive-user authenticates but cannot access business data", async ({
   page,
 }) => {
   await signInWithPassword(page, "inactive-user");
-  await page.waitForURL("**/employees");
+  await expect(page).toHaveURL("/");
   await expect(
     page.getByText("업무 계정에 접근할 수 없습니다.", { exact: true }),
   ).toBeVisible();

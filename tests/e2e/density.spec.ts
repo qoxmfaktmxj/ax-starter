@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { signInWithPassword } from "./login";
+import { signInToEmployees } from "./login";
 
 async function setDensity(page: Page, label: "기본" | "촘촘하게") {
   await page.getByRole("button", { name: "화면 설정" }).click();
@@ -84,7 +84,7 @@ for (const theme of ["cobalt", "isu"]) {
         { name: "ax-appearance", value: `${theme}.${mode}`, url: baseURL! },
       ]);
       await page.setViewportSize({ width: 1440, height: 900 });
-      await signInWithPassword(page, "hr-admin");
+      await signInToEmployees(page, "hr-admin");
       await expect(page.getByText("전체 24건")).toBeVisible();
       const root = page.locator("html");
       await expect(root).toHaveAttribute("data-density", "default");

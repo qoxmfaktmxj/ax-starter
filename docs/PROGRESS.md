@@ -654,3 +654,16 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - `pnpm exec playwright test --config output/inbox-261111/host.config.ts`로 전체 브라우저 테스트를 세 그룹으로 실행했다. 62개 중 60개가 첫 실행에서 통과했다. 응답 유실 테스트는 Next 자체 alert까지 매칭하는 검사 선택자를 수정했다. 기존 모바일 화면 설정 테스트는 로그인 횟수 제한에서 멈췄다. 같은 빌드에서 두 검사 및 초안 재로그인 검사를 다시 실행해 3/3 통과했다. [신청함 그룹](../output/inbox-261111/e2e-inbox.log), [데이터 그룹](../output/inbox-261111/e2e-data.log), [나머지 그룹](../output/inbox-261111/e2e-other.log), [최종 재검사](../output/inbox-261111/final-recheck.log)
 - 1440px/320px 각각에서 네 테마와 두 밀도를 순회하며 검색 0건과 초기화, 상세/편집과 줄바꿈 보존, 검토/복귀 및 수정 재저장을 확인했다. 응답 유실 재시도에서 같은 requestId로 단일 초안을 복구하고 실제 두 탭의 409 이후 사유가 보존됐다.
 - 독립 Linux 러너를 정리하고, Compose 전용 라벨 확인 후 `docker compose -p ax-inbox-261111 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 테스트 컨테이너, 네트워크, DB 볼륨을 제거했다.
+
+## 2026-11-11 로그인 홈과 계정별 포털/내 업무 선택
+
+성공 기준은 첫 로그인에 ‘내 업무’를 열고, 홈에서 고른 마지막 모드를 같은 업무 계정의 다음 로그인에 복원하는 것이다. 개인 초안에 한 번에 진입하고, 포털에서는 현재 권한에 맞는 업무로 이동하며, 320px와 라이트/다크에서도 같은 작업을 수행할 수 있어야 한다.
+
+- `git ls-remote origin refs/heads/main`으로 착수 시 로컬과 원격 main의 `134887a` 일치를 확인했다. 비밀번호와 SSO의 목적지를 홈으로 바꾸고 일반 업무 화면의 홈 링크에 기존 이탈 확인을 연결했다.
+- 전용 DB에 이전 이관과 시드를 적용한 뒤 `pnpm migrate`로 업그레이드해 기존 업무 계정 6개가 모두 ‘내 업무’로 시작하는 것을 확인했다. 홈 모드는 PostgreSQL의 업무 계정에 저장한다. [이관](../packages/server/db/migrations/0005_home_mode.sql)
+- `pnpm check` 통과(경계 88개 소스), `pnpm test` 41개 통과, test 프로필 `pnpm build` 성공. 전용 Linux 러너에서 `pnpm test:integration` 35개 통과. [정적 검사](../output/home-261111/check.log), [빌드](../output/home-261111/build.log), [통합 검사](../output/home-261111/integration-linux.log)
+- `node output/home-261111/direct-entry.mjs`로 320px Chrome에서 SSO 로그인 후 사원관리, 인사/조직, 내 신청함 URL 직접 진입과 홈 복귀를 확인했다. 잘못된 초안 링크에서 목록으로 돌아가고, 작성 중 홈 이동을 취소한 뒤 입력값을 확인하고 다시 홈으로 이동했다. [직접 조작 로그](../output/home-261111/direct-entry.log)
+- 새 브라우저의 계정별 모드 복원, SSO로 빈 신청 열기, 저장 오류 재시도와 저장 중 로그아웃, 최근 수정한 초안의 과정/사유 복원 검사가 통과했다. 동일 계정, 동일 데이터의 실제 화면을 캡처했다. [내 업무 라이트](../output/playwright/home-work-light.png), [내 업무 다크](../output/playwright/home-work-dark.png), [포털 라이트](../output/playwright/home-portal-light.png), [포털 다크](../output/playwright/home-portal-dark.png), [320px 포털](../output/playwright/home-portal-320.png)
+- 독립 코드 리뷰 후 홈 모드 저장 실패가 로그아웃을 취소하지 않도록 수정했다. 독립 디자인 리뷰 후 포털 바로가기를 모바일에서 한 열로 표시하고 실제 캡처 5장을 재확인했다.
+- 첫 전체 브라우저 실행에서 연속 비밀번호 로그인 3건이 횟수 제한에 걸렸다. 테스트 도우미가 429의 재시도 시간을 준수하도록 조정하고, 저장 도중 로그아웃했을 때 PUT 성공/실패 양쪽의 세션 종료 검사를 추가했다. `pnpm exec playwright test --config output/home-261111/host.config.ts` 최종 전체 67개 통과. [첫 검사](../output/home-261111/e2e.log), [최종 검사](../output/home-261111/e2e-final.log)
+- 브라우저 검증용 호스트 Web/Worker 종료 후 전용 Compose 프로젝트 `ax-home-261111`의 컨테이너, 네트워크, 볼륨과 작업 전용 러너 이미지를 정리했다. 프로젝트 라벨 및 전용 이미지 이름으로 잔여 자원이 없는 것을 확인했다.

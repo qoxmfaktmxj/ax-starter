@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
-import { signInWithPassword } from "./login";
+import { signInToEmployees } from "./login";
 import { textContrast } from "./text-contrast";
 
 async function checkBadge(badge: Locator, label: string) {
@@ -27,7 +27,7 @@ for (const theme of ["cobalt", "isu"]) {
         { name: "ax-appearance", value: `${theme}.${mode}`, url: baseURL! },
       ]);
       await page.setViewportSize({ width: 1440, height: 900 });
-      await signInWithPassword(page, "org-manager");
+      await signInToEmployees(page, "org-manager");
       await expect(page.getByText("전체 12건")).toBeVisible();
       const root = page.locator("html");
       await expect(root).toHaveAttribute("data-theme", theme);

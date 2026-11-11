@@ -22,6 +22,8 @@ type MenuItem = {
 export function WorkspaceShell({
   layout = "side",
   menu,
+  homeCurrent = false,
+  onHome,
   scopeLabel,
   search,
   onSignOut,
@@ -29,6 +31,8 @@ export function WorkspaceShell({
 }: {
   layout?: MenuLayout;
   menu: MenuItem[];
+  homeCurrent?: boolean;
+  onHome?: () => void;
   scopeLabel: string;
   search?: ReactNode;
   onSignOut: () => void;
@@ -51,11 +55,24 @@ export function WorkspaceShell({
   return (
     <main className="workspaceShell" data-menu={layout}>
       <aside className="workspaceRail" aria-label="업무 메뉴">
-        <div
+        <a
           className="workspaceBrand"
-          role="img"
-          aria-label={BRAND_NAME}
-          title={BRAND_NAME}
+          href="/"
+          aria-label="홈"
+          aria-current={homeCurrent ? "page" : undefined}
+          title={`${BRAND_NAME} 홈`}
+          onClick={(event) => {
+            if (
+              onHome &&
+              !event.ctrlKey &&
+              !event.metaKey &&
+              !event.shiftKey &&
+              !event.altKey
+            ) {
+              event.preventDefault();
+              onHome();
+            }
+          }}
         >
           <svg
             aria-hidden="true"
@@ -67,7 +84,7 @@ export function WorkspaceShell({
             <path d="m2 20 8-16h5L7 20zM12 16l3-6 7 10h-7z" />
           </svg>
           <span>{BRAND_NAME}</span>
-        </div>
+        </a>
         <nav aria-label="주 메뉴">
           {menu.map((item) => (
             <button

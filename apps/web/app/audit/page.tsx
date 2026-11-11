@@ -52,7 +52,9 @@ export default function AuditPage() {
     <main className="auditPage">
       <header className="auditHeader">
         <div>
-          <p className="auditEyebrow">ADMINISTRATION</p>
+          <a className="auditHome" href="/">
+            홈
+          </a>
           <h1>감사 기록</h1>
           <p className="auditDescription">
             최근 업무 변경과 접근 결과를 확인합니다.

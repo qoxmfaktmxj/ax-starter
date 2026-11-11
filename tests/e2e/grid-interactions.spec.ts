@@ -1,9 +1,8 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { signInWithPassword } from "./login";
+import { signInToEmployees } from "./login";
 
 async function openBatch(page: Page) {
-  await signInWithPassword(page, "hr-admin");
-  await page.waitForURL("**/employees");
+  await signInToEmployees(page, "hr-admin");
   await page.getByRole("button", { name: "일괄편집" }).click();
   await expect(
     page.getByRole("gridcell", { name: "E001", exact: true }),

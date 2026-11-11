@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   educationRequestSave,
   type EducationDraft,
+  type EducationDraftSummary,
   type EducationInbox,
   type EducationRequestSave,
 } from "../../contracts/education-requests";
@@ -55,21 +56,44 @@ async function getActor(tx: Tx, ctx: ExecutionContext, forSave = false) {
   return actor;
 }
 
+function draftSummaries(tx: Tx, ownerId: string) {
+  return tx
+    .select(summaryFields)
+    .from(educationDrafts)
+    .leftJoin(
+      educationCourses,
+      eq(educationDrafts.courseId, educationCourses.id),
+    )
+    .where(eq(educationDrafts.ownerId, ownerId))
+    .orderBy(desc(educationDrafts.updatedAt), desc(educationDrafts.id));
+}
+
+function toSummary(
+  row: Awaited<ReturnType<typeof draftSummaries>>[number],
+): EducationDraftSummary {
+  return { ...row, updatedAt: row.updatedAt.toISOString(), status: "DRAFT" };
+}
+
+export async function getLatestEducationDraft(
+  ctx: ExecutionContext,
+): Promise<EducationDraftSummary | null> {
+  return db.transaction(
+    async (tx) => {
+      const actor = await getActor(tx, ctx);
+      const [draft] = await draftSummaries(tx, actor.id).limit(1);
+      return draft ? toSummary(draft) : null;
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
+}
+
 export async function listEducationDrafts(
   ctx: ExecutionContext,
 ): Promise<EducationInbox> {
   return db.transaction(
     async (tx) => {
       const actor = await getActor(tx, ctx);
-      const rows = await tx
-        .select(summaryFields)
-        .from(educationDrafts)
-        .leftJoin(
-          educationCourses,
-          eq(educationDrafts.courseId, educationCourses.id),
-        )
-        .where(eq(educationDrafts.ownerId, actor.id))
-        .orderBy(desc(educationDrafts.updatedAt), desc(educationDrafts.id));
+      const rows = await draftSummaries(tx, actor.id);
       const courses = await tx
         .select()
         .from(educationCourses)
@@ -91,11 +115,7 @@ export async function listEducationDrafts(
               )
           : [];
       return {
-        drafts: rows.map((row) => ({
-          ...row,
-          updatedAt: row.updatedAt.toISOString(),
-          status: "DRAFT" as const,
-        })),
+        drafts: rows.map(toSummary),
         courses,
         applicant: { account: actor.subject, employee: employee ?? null },
       };

@@ -59,6 +59,7 @@ type ExportInfo = {
   errorCode?: string | null;
 };
 type LeaveAction =
+  | "home"
   | "search"
   | "browse"
   | "batch-edit"
@@ -494,7 +495,8 @@ export default function EmployeesPage() {
         sort: [],
       });
       setRefresh((value) => value + 1);
-    } else if (action === "audit") window.location.assign("/audit");
+    } else if (action === "home") window.location.assign("/");
+    else if (action === "audit") window.location.assign("/audit");
     else if (action === "requests") window.location.assign("/my-requests");
     else if (action === "organization") window.location.assign("/organization");
     else if (action === "templates") window.location.assign("/design-system");
@@ -867,6 +869,7 @@ export default function EmployeesPage() {
 
   return (
     <WorkspaceShell
+      onHome={() => requestAction("home")}
       menu={[
         {
           label: "사원관리",

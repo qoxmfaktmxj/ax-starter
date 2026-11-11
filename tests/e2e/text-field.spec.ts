@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { signInWithPassword } from "./login";
+import { signInToEmployees } from "./login";
 import { textContrast } from "./text-contrast";
 
 for (const theme of ["cobalt", "isu"]) {
@@ -12,7 +12,7 @@ for (const theme of ["cobalt", "isu"]) {
       await context.addCookies([
         { name: "ax-appearance", value: `${theme}.${mode}`, url: baseURL! },
       ]);
-      await signInWithPassword(page, "org-manager");
+      await signInToEmployees(page, "org-manager");
       await expect(page.getByText("전체 12건")).toBeVisible();
       const employeeNo = page.getByRole("textbox", {
         name: "사번",

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type FormEvent, type MouseEvent } from "react";
-import { useRouter } from "next/navigation";
 import { authClient } from "../../auth-client";
 import LoginScene from "./LoginScene";
 import {
@@ -24,7 +23,6 @@ export default function LoginScreen({
   initialSeason: LoginSeason;
   date: string;
 }) {
-  const router = useRouter();
   const [pending, setPending] = useState<"password" | "sso" | null>(null);
   const [error, setError] = useState("");
   const [season, setSeason] = useState(initialSeason);
@@ -55,7 +53,7 @@ export default function LoginScreen({
         setPending(null);
         return;
       }
-      router.push("/employees");
+      window.location.replace("/");
     } catch {
       setError(UNREACHABLE);
       setPending(null);
@@ -68,7 +66,7 @@ export default function LoginScreen({
     try {
       const result = await authClient.signIn.social({
         provider: "local-oidc",
-        callbackURL: "/employees",
+        callbackURL: "/",
       });
       if (result.error)
         setError("SSO 로그인을 시작하지 못했습니다. 다시 시도해 주세요.");

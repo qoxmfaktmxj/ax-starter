@@ -51,6 +51,7 @@ function isManager(ctx: ExecutionContext, actor: Account) {
 
 export async function getOrganizationOverview(
   ctx: ExecutionContext,
+  view: "directory" | "self" = "directory",
 ): Promise<OrganizationOverview> {
   const principal = principalOf(ctx);
   return db.transaction(
@@ -110,7 +111,8 @@ export async function getOrganizationOverview(
           }
         }
       }
-      if (!isManager(ctx, actor)) return { self, management: null };
+      if (view === "self" || !isManager(ctx, actor))
+        return { self, management: null };
       const accountRows = await tx
         .select({
           id: appUsers.id,

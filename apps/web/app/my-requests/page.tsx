@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { z } from "zod";
 import type {
   EducationDraft,
   EducationDraftSummary,
@@ -29,6 +30,7 @@ type Destination =
   | "list"
   | "latest"
   | "logout"
+  | "/"
   | "/employees"
   | "/organization"
   | "/design-system"
@@ -77,6 +79,7 @@ export default function MyRequestsPage() {
   const [listError, setListError] = useState("");
   const [revision, refresh] = useState(0);
   const [selectedId, setSelectedId] = useState("");
+  const [resumeFromLink, setResumeFromLink] = useState(false);
   const [detail, setDetail] = useState<EducationDraft | null>(null);
   const [detailError, setDetailError] = useState("");
   const [detailRevision, refreshDetail] = useState(0);
@@ -99,6 +102,20 @@ export default function MyRequestsPage() {
     (edit.courseId !== (edit.saved?.course?.id ?? null) ||
       edit.reason !== (edit.saved?.reason ?? "") ||
       uncertain);
+  const formVisible = !!edit && !!inbox;
+
+  useEffect(() => {
+    if (!permitted) return;
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("draft");
+    if (id !== null) {
+      setResumeFromLink(true);
+      if (z.uuid().safeParse(id).success) setSelectedId(id);
+      else setDetailError("신청서를 찾을 수 없습니다.");
+    } else if (params.get("new") === "1") {
+      openForm(null);
+    }
+  }, [permitted]);
 
   useEffect(() => {
     if (!permitted) return;
@@ -114,17 +131,19 @@ export default function MyRequestsPage() {
   }, [permitted, revision]);
 
   useEffect(() => {
-    if (!selectedId || !permitted) return;
+    if (!selectedId || !permitted || detail?.id === selectedId) return;
     const c = new AbortController();
     read<EducationDraft>(`/api/requests/${selectedId}`, c.signal)
       .then((result) => {
-        if (!c.signal.aborted) setDetail(result);
+        if (c.signal.aborted) return;
+        setDetail(result);
+        if (resumeFromLink) openForm(result);
       })
       .catch((error: Error) => {
         if (!c.signal.aborted) setDetailError(error.message);
       });
     return () => c.abort();
-  }, [permitted, selectedId, detailRevision]);
+  }, [permitted, selectedId, detailRevision, detail?.id, resumeFromLink]);
 
   useEffect(() => {
     if (!edit && inbox && (detail || detailError) && focusDetail.current) {
@@ -132,6 +151,11 @@ export default function MyRequestsPage() {
       focusDetail.current = false;
     }
   }, [detail, detailError, inbox, edit]);
+
+  useEffect(() => {
+    if (formVisible)
+      document.querySelector<HTMLElement>(".requestExample h2")?.focus();
+  }, [formVisible]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -167,12 +191,20 @@ export default function MyRequestsPage() {
       courseId: saved?.course?.id ?? null,
       reason: saved?.reason ?? "",
     });
-    requestAnimationFrame(() =>
-      document.querySelector<HTMLElement>(".requestExample h2")?.focus(),
-    );
   }
+  function clearFormLink() {
+    setResumeFromLink(false);
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("draft") || url.searchParams.has("new")) {
+      url.searchParams.delete("draft");
+      url.searchParams.delete("new");
+      window.history.replaceState(window.history.state, "", url);
+    }
+  }
+
   function go(destination: Destination) {
     setIntent(null);
+    if (destination === "list" || destination === "latest") clearFormLink();
     if (destination === "latest") {
       setEdit(null);
       setNotice("");
@@ -181,6 +213,7 @@ export default function MyRequestsPage() {
       return;
     }
     if (destination === "list") {
+      if (resumeFromLink && !edit) loadDetail("", false);
       setEdit(null);
       if (uncertain || conflict) {
         if (uncertain && !edit?.saved) {
@@ -248,6 +281,7 @@ export default function MyRequestsPage() {
       const result = (await res.json()) as { id: string };
       command.current = null;
       setUncertain(false);
+      clearFormLink();
       setEdit(null);
       setNotice("교육 신청 초안을 임시저장했습니다.");
       const savedCourse =
@@ -293,6 +327,7 @@ export default function MyRequestsPage() {
   return (
     <WorkspaceShell
       scopeLabel={scopeLabel(me.dataScope)}
+      onHome={() => navigate("/")}
       onSignOut={() => navigate("logout")}
       menu={[
         ...(me.permissions.includes("emp.read")
@@ -334,7 +369,7 @@ export default function MyRequestsPage() {
       <section className="workspaceMain inboxWorkspace">
         <header className="workspaceHeader">
           <h1>내 신청함</h1>
-          {!edit && !!inbox?.drafts.length && (
+          {!edit && !resumeFromLink && !!inbox?.drafts.length && (
             <ActionButton primary onClick={() => openForm(null)}>
               새 신청
             </ActionButton>
@@ -352,6 +387,24 @@ export default function MyRequestsPage() {
           </div>
         ) : !inbox ? (
           <p role="status">신청 목록을 불러오고 있습니다.</p>
+        ) : resumeFromLink && !edit ? (
+          <div className="inboxPanel inboxEmpty">
+            {detailError ? (
+              <>
+                <p role="alert">{detailError}</p>
+                {selectedId && (
+                  <ActionButton onClick={() => loadDetail(selectedId, false)}>
+                    다시 조회
+                  </ActionButton>
+                )}
+                <ActionButton onClick={() => navigate("list")}>
+                  목록으로
+                </ActionButton>
+              </>
+            ) : (
+              <p role="status">신청 내용을 불러오고 있습니다.</p>
+            )}
+          </div>
         ) : edit ? (
           <>
             <EducationDraftForm

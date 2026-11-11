@@ -1,14 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
+import { openEmployeesFromHome, signInWithFixture } from "./login";
 
 const employeeId = "00000000-0000-4000-8000-000000000001";
 
 async function signIn(page: Page) {
-  await page.goto("/login");
-  await page.getByRole("button", { name: "SSO로 로그인" }).click();
-  await page.getByPlaceholder("Enter any user/subject").fill("hr-admin");
-  await page.getByRole("button", { name: "Sign-in" }).click();
-  await page.waitForURL("**/employees");
+  await signInWithFixture(page, "hr-admin");
+  await openEmployeesFromHome(page);
   await page.getByRole("button", { name: "일괄편집" }).click();
   await expect(
     page.getByRole("gridcell", { name: "E001", exact: true }),

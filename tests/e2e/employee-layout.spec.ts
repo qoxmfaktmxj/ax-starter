@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { signInWithPassword } from "./login";
+import { signInToEmployees } from "./login";
 
 for (const brand of ["코발트", "ISU"]) {
   test(`employee search, grid and current detail stay connected in ${brand}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await signInWithPassword(page, "org-manager");
+    await signInToEmployees(page, "org-manager");
     const search = page.getByRole("form", { name: "사원 검색" });
     const grid = page.getByRole("grid");
     const detail = page.getByRole("complementary", { name: "상세와 작업" });

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { signInWithPassword } from "./login";
+import { signInToEmployees, signInWithPassword } from "./login";
 import { textContrast } from "./text-contrast";
 
 test("the component catalog shows three save states in all four themes", async ({
@@ -114,7 +114,7 @@ test("permissions and related grids follow the signed-in user and selected cours
 test("a new employee search resets the page and indicates a pending query", async ({
   page,
 }) => {
-  await signInWithPassword(page, "hr-admin");
+  await signInToEmployees(page, "hr-admin");
   await expect(page.getByText("전체 24건")).toBeVisible();
   await page.getByRole("button", { name: "다음 페이지" }).click();
   await expect(
@@ -146,7 +146,7 @@ test("a new employee search resets the page and indicates a pending query", asyn
 test("detail actions follow the current employee while a new detail loads", async ({
   page,
 }) => {
-  await signInWithPassword(page, "hr-admin");
+  await signInToEmployees(page, "hr-admin");
   const checkbox = (employeeNo: string) =>
     page.getByRole("row").filter({ hasText: employeeNo }).getByRole("checkbox");
   await checkbox("E001").click();

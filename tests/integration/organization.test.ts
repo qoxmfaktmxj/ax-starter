@@ -109,6 +109,12 @@ afterAll(async () => {
 
 describe("organization directory", () => {
   it("returns only the caller's minimal profile and checks management access in the service", async () => {
+    const adminHome = await getOrganizationOverview(
+      await resolveActorContext(adminId),
+      "self",
+    );
+    expect(adminHome.self.employee?.employeeNo).toBe("E001");
+    expect(adminHome.management).toBeNull();
     const ctx = await resolveActorContext(managerId);
     const overview = await getOrganizationOverview(ctx);
     expect(overview.management).toBeNull();

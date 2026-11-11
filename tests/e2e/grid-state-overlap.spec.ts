@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
-import { signInWithPassword } from "./login";
+import { signInToEmployees } from "./login";
 import { textContrast } from "./text-contrast";
 
 async function edit(cell: Locator, value: string) {
@@ -13,7 +13,7 @@ test("selected employee, focused cell and validation errors remain distinct", as
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await signInWithPassword(page, "hr-admin");
+  await signInToEmployees(page, "hr-admin");
   await page.getByRole("button", { name: "일괄편집" }).click();
   const row = page.getByRole("row").filter({ hasText: "E001" });
   const checkbox = row.getByRole("checkbox");

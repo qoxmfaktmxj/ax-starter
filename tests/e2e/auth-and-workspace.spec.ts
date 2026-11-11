@@ -1,19 +1,11 @@
-import { expect, test, type Page } from "@playwright/test";
-
-async function signInWithFixture(page: Page, subject: string) {
-  await page.goto("/login");
-  await page.getByRole("button", { name: "SSO로 로그인" }).click();
-  const subjectInput = page.getByPlaceholder("Enter any user/subject");
-  await expect(subjectInput).toBeVisible();
-  await subjectInput.fill(subject);
-  await subjectInput.press("Enter");
-  await page.waitForURL("**/employees");
-}
+import { expect, test } from "@playwright/test";
+import { openEmployeesFromHome, signInWithFixture } from "./login";
 
 test("hr-admin completes OIDC login and sees 24 seeded employees with salary", async ({
   page,
 }) => {
   await signInWithFixture(page, "hr-admin");
+  await openEmployeesFromHome(page);
 
   await expect(page.getByText("전체 24건")).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "월급" })).toBeVisible();
@@ -30,6 +22,7 @@ test("org-manager sees 12 in-scope employees and no salary in UI or query API", 
   page,
 }) => {
   await signInWithFixture(page, "org-manager");
+  await openEmployeesFromHome(page);
 
   await expect(page.getByText("전체 12건")).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "월급" })).toHaveCount(0);
@@ -107,6 +100,7 @@ test("cancelling dirty navigation preserves the edited value", async ({
   page,
 }) => {
   await signInWithFixture(page, "hr-admin");
+  await openEmployeesFromHome(page);
   await page.getByRole("button", { name: "일괄편집" }).click();
 
   const nameCell = page.getByRole("gridcell", {
