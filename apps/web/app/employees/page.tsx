@@ -25,6 +25,8 @@ import {
   type GridColumn,
   type GridSort,
 } from "../../../../packages/grid/DataGrid";
+import { EmployeeStatusBadge } from "../../../../packages/ui/workspace/EmployeeStatusBadge";
+import "./employee-workspace.css";
 import { DirtyDialog } from "../../../../packages/ui/DirtyDialog";
 import { authClient } from "../../auth-client";
 import {
@@ -168,8 +170,13 @@ export default function EmployeesPage() {
   const draftRows = draftState.rows;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const detailId = selectedIds.find((id) => !id.startsWith("new-"));
-  const [selectedRow, setSelectedRow] = useState<EmployeeRow | null>(null);
-  const [files, setFiles] = useState<FileInfo[]>([]);
+  const [detail, setDetail] = useState<{
+    id: string;
+    employee: EmployeeRow | null;
+    files: FileInfo[];
+  } | null>(null);
+  const currentDetail = detail?.id === detailId ? detail : null;
+  const currentEmployee = currentDetail?.employee;
   const [fileBusy, setFileBusy] = useState(false);
   const [exportJob, setExportJob] = useState<ExportInfo | null>(null);
   const [exportPending, setExportPending] = useState<{
@@ -415,8 +422,7 @@ export default function EmployeesPage() {
 
   useEffect(() => {
     if (!detailId) {
-      setSelectedRow(null);
-      setFiles([]);
+      setDetail(null);
       return;
     }
     let cancelled = false;
@@ -430,12 +436,15 @@ export default function EmployeesPage() {
     ])
       .then(([row, data]) => {
         if (!cancelled) {
-          setSelectedRow(row);
-          setFiles(data.rows ?? []);
+          setDetail({
+            id: detailId,
+            employee: row?.id === detailId ? row : null,
+            files: data.rows ?? [],
+          });
         }
       })
       .catch(() => {
-        if (!cancelled) setError("상세 정보를 불러오지 못했습니다");
+        if (!cancelled) setDetail({ id: detailId, employee: null, files: [] });
       });
     return () => {
       cancelled = true;
@@ -784,15 +793,18 @@ export default function EmployeesPage() {
 
   async function uploadFile() {
     const file = fileInput.current?.files?.[0];
-    if (!file || !selectedRow) return;
+    if (!file || !currentEmployee) return;
     setFileBusy(true);
     try {
       const body = new FormData();
       body.append("file", file);
-      const response = await fetch(`/api/employees/${selectedRow.id}/files`, {
-        method: "POST",
-        body,
-      });
+      const response = await fetch(
+        `/api/employees/${currentEmployee.id}/files`,
+        {
+          method: "POST",
+          body,
+        },
+      );
       const data = await response.json();
       if (!response.ok) throw new Error(data.message ?? "업로드 실패");
       setNotice(
@@ -884,30 +896,10 @@ export default function EmployeesPage() {
       ]}
       onSignOut={() => requestAction("logout")}
       scopeLabel={scopeLabel(me.dataScope)}
-      search={
-        <label className="workspaceSearch">
-          <WorkspaceIcon name="search" />
-          <input
-            form="employee-query"
-            type="search"
-            aria-label="이름"
-            placeholder="사원 이름 검색"
-            value={draftFilter.name}
-            onChange={(event) =>
-              setDraftFilter({ ...draftFilter, name: event.target.value })
-            }
-          />
-        </label>
-      }
     >
-      <section className="workspaceMain">
+      <section className="workspaceMain employeeWorkspace">
         <header className="workspaceHeader">
-          <div className="registerTitle">
-            <h1>사원관리</h1>
-            <span className="resultCount">
-              전체 {countCapped ? "10,000건 이상" : `${count}건`}
-            </span>
-          </div>
+          <h1>사원관리</h1>
           <div className="workspaceActions">
             {canExport && (
               <ExportActions
@@ -932,69 +924,105 @@ export default function EmployeesPage() {
             )}
           </div>
         </header>
-        <GridLayout>
-          <GridPanel>
-            <SearchPanel
-              pending={loading}
-              disabled={busy}
-              id="employee-query"
-              aria-label="사원 검색"
-              onSubmit={(event) => {
-                event.preventDefault();
-                requestAction("search");
-              }}
+        <SearchPanel
+          pending={loading}
+          disabled={busy}
+          id="employee-query"
+          aria-label="사원 검색"
+          onSubmit={(event) => {
+            event.preventDefault();
+            requestAction("search");
+          }}
+        >
+          <h2>검색 조건</h2>
+          <TextField
+            label="사번"
+            placeholder="사번 입력"
+            value={draftFilter.employeeNo}
+            onChange={(event) =>
+              setDraftFilter({
+                ...draftFilter,
+                employeeNo: event.target.value,
+              })
+            }
+          />
+          <TextField
+            label="이름"
+            type="search"
+            placeholder="사원 이름 검색"
+            value={draftFilter.name}
+            onChange={(event) =>
+              setDraftFilter({ ...draftFilter, name: event.target.value })
+            }
+          />
+          <label>
+            조직
+            <select
+              value={draftFilter.orgId}
+              onChange={(event) =>
+                setDraftFilter({
+                  ...draftFilter,
+                  orgId: event.target.value,
+                })
+              }
             >
-              <TextField
-                label="사번"
-                placeholder="사번 입력"
-                value={draftFilter.employeeNo}
-                onChange={(event) =>
-                  setDraftFilter({
-                    ...draftFilter,
-                    employeeNo: event.target.value,
-                  })
-                }
-              />
-              <label>
-                조직
-                <select
-                  value={draftFilter.orgId}
-                  onChange={(event) =>
-                    setDraftFilter({
-                      ...draftFilter,
-                      orgId: event.target.value,
-                    })
-                  }
+              <option value="">전체</option>
+              {organizations.map((org) => (
+                <option key={org.id} value={org.id}>
+                  {org.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            상태
+            <select
+              value={draftFilter.status}
+              onChange={(event) =>
+                setDraftFilter({
+                  ...draftFilter,
+                  status: event.target.value,
+                })
+              }
+            >
+              <option value="">전체</option>
+              <option value="ACTIVE">재직</option>
+              <option value="LEAVE">휴직</option>
+            </select>
+          </label>
+        </SearchPanel>
+        <div className="employeeResults">
+          <div className="employeeList">
+            <GridLayout>
+              <GridPanel>
+                <header
+                  className="employeeListHeader"
+                  id="employee-list"
+                  tabIndex={-1}
                 >
-                  <option value="">전체</option>
-                  {organizations.map((org) => (
-                    <option key={org.id} value={org.id}>
-                      {org.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                상태
-                <select
-                  value={draftFilter.status}
-                  onChange={(event) =>
-                    setDraftFilter({
-                      ...draftFilter,
-                      status: event.target.value,
-                    })
-                  }
-                >
-                  <option value="">전체</option>
-                  <option value="ACTIVE">재직</option>
-                  <option value="LEAVE">휴직</option>
-                </select>
-              </label>
-            </SearchPanel>
-            {(mode === "batch-edit" || appliedFilters.length > 0) && (
-              <div className="workspaceToolbar">
+                  <h2>사원 목록</h2>
+                  <span className="resultCount">
+                    전체 {countCapped ? "10,000건 이상" : `${count}건`}
+                  </span>
+                  {selectedIds.length > 0 && (
+                    <span className="employeeSelection">
+                      선택 {selectedIds.length}건
+                    </span>
+                  )}
+                  {currentEmployee && (
+                    <a className="employeeDetailJump" href="#employee-detail">
+                      {currentEmployee.name} ({currentEmployee.employeeNo}) 상세
+                      보기
+                    </a>
+                  )}
+                </header>
+                {appliedFilters.length > 0 && (
+                  <p className="employeeApplied">
+                    적용한 조건: {appliedFilters.join(", ")}
+                  </p>
+                )}
                 {mode === "batch-edit" && (
-                  <>
+                  <div className="workspaceToolbar">
                     <button
                       onClick={addRow}
                       disabled={
@@ -1035,184 +1063,219 @@ export default function EmployeesPage() {
                     >
                       다시 실행
                     </button>
-                  </>
+                    <span className={dirty ? "dirtyCount" : undefined}>
+                      변경 {changes.length}건
+                    </span>
+                  </div>
                 )}
-                <span className="appliedFilters">
-                  현재 조회 조건: {appliedFilters.join(", ") || "전체"}
-                </span>
                 {mode === "batch-edit" && (
-                  <span className={dirty ? "dirtyCount" : ""}>
-                    변경 {changes.length}건
-                  </span>
+                  <p className="workspaceGridGuide">
+                    셀을 드래그해 범위를 선택하세요. Ctrl+C로 복사하고 Ctrl+V로
+                    붙여넣습니다. 선택 끝의 점을 드래그하면 자동으로 채웁니다.
+                  </p>
                 )}
-              </div>
-            )}
-            {mode === "batch-edit" && (
-              <p className="workspaceGridGuide">
-                셀을 드래그해 범위를 선택하세요. Ctrl+C로 복사하고 Ctrl+V로
-                붙여넣습니다. 선택 끝의 점을 드래그하면 자동으로 채웁니다.
-              </p>
-            )}
-            <div className="workspaceGridArea" aria-busy={loading}>
-              {mode === "browse" ? (
-                <DataGrid
-                  key={`browse-${JSON.stringify(query)}-${refresh}`}
-                  mode="browse"
-                  columns={columns}
-                  loadRows={loadRows}
-                  pageSize={20}
-                  onQueryPendingChange={setLoading}
-                  onGridMessage={(message, isError) => {
-                    if (isError) setError(message);
-                    else setNotice(message);
-                  }}
-                  onSelectedIdsChange={setSelectedIds}
-                  loading={loading}
-                />
-              ) : (
-                <DataGrid
-                  mode="batch-edit"
-                  columns={columns}
-                  rows={draftRows}
-                  onCellChange={editCell}
-                  onCellsChange={applyCells}
-                  onUndo={() => restoreDraft("undo")}
-                  onRedo={() => restoreDraft("redo")}
-                  onGridMessage={(message, isError) => {
-                    if (isError) setError(message);
-                    else setNotice(message);
-                  }}
-                  onSelectedIdsChange={setSelectedIds}
-                  onEditingChanged={setEditing}
-                  commitEditingRef={commitEditingRef}
-                  focusTarget={focusTarget}
-                  cellErrors={cellErrors}
-                  loading={loading || busy}
-                />
+                <div className="workspaceGridArea" aria-busy={loading}>
+                  {mode === "browse" ? (
+                    <DataGrid
+                      key={`browse-${JSON.stringify(query)}-${refresh}`}
+                      mode="browse"
+                      columns={columns}
+                      loadRows={loadRows}
+                      pageSize={20}
+                      onQueryPendingChange={setLoading}
+                      onGridMessage={(message, isError) => {
+                        if (isError) setError(message);
+                        else setNotice(message);
+                      }}
+                      onSelectedIdsChange={setSelectedIds}
+                      loading={loading}
+                    />
+                  ) : (
+                    <DataGrid
+                      mode="batch-edit"
+                      columns={columns}
+                      rows={draftRows}
+                      onCellChange={editCell}
+                      onCellsChange={applyCells}
+                      onUndo={() => restoreDraft("undo")}
+                      onRedo={() => restoreDraft("redo")}
+                      onGridMessage={(message, isError) => {
+                        if (isError) setError(message);
+                        else setNotice(message);
+                      }}
+                      onSelectedIdsChange={setSelectedIds}
+                      onEditingChanged={setEditing}
+                      commitEditingRef={commitEditingRef}
+                      focusTarget={focusTarget}
+                      cellErrors={cellErrors}
+                      loading={loading || busy}
+                    />
+                  )}
+                </div>
+              </GridPanel>
+            </GridLayout>
+            <div className="workspaceMessages" aria-live="polite">
+              {loading && <p role="status">행을 불러오고 있습니다.</p>}
+              {error && (
+                <p className="error" role="alert">
+                  {error}
+                </p>
+              )}
+              {conflicts.map((item) => (
+                <p key={item.rowId}>
+                  충돌 행{" "}
+                  {draftRows.find((row) => row.id === item.rowId)?.employeeNo ??
+                    item.rowId}
+                  : 현재 버전 {item.currentVersion}
+                </p>
+              ))}
+              {rowErrors.map((item, index) => (
+                <p key={`${item.rowKey}:${item.field ?? ""}:${index}`}>
+                  입력 오류{" "}
+                  {draftRows.find((row) => row.id === item.rowKey)
+                    ?.employeeNo ?? item.rowKey}
+                  {item.field
+                    ? ` ${item.field === "orgId" ? "조직" : (columns.find((column) => column.field === item.field)?.label ?? item.field)}`
+                    : ""}
+                  : {item.message}
+                </p>
+              ))}
+              {notice && (
+                <p className="success" role="status">
+                  {notice}
+                </p>
+              )}
+              {mode === "batch-edit" && !draftRows.length && !loading && (
+                <p>
+                  조회 조건에 맞는 사원이 없습니다. 조회 조건을 바꿔 주세요.
+                </p>
               )}
             </div>
-          </GridPanel>
-        </GridLayout>
-        <div className="workspaceMessages" aria-live="polite">
-          {loading && <p role="status">행을 불러오고 있습니다.</p>}
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
-          {conflicts.map((item) => (
-            <p key={item.rowId}>
-              충돌 행{" "}
-              {draftRows.find((row) => row.id === item.rowId)?.employeeNo ??
-                item.rowId}
-              : 현재 버전 {item.currentVersion}
-            </p>
-          ))}
-          {rowErrors.map((item, index) => (
-            <p key={`${item.rowKey}:${item.field ?? ""}:${index}`}>
-              입력 오류{" "}
-              {draftRows.find((row) => row.id === item.rowKey)?.employeeNo ??
-                item.rowKey}
-              {item.field
-                ? ` ${item.field === "orgId" ? "조직" : (columns.find((column) => column.field === item.field)?.label ?? item.field)}`
-                : ""}
-              : {item.message}
-            </p>
-          ))}
-          {notice && (
-            <p className="success" role="status">
-              {notice}
-            </p>
-          )}
-          {mode === "batch-edit" && !draftRows.length && !loading && (
-            <p>조회 조건에 맞는 사원이 없습니다. 조회 조건을 바꿔 주세요.</p>
+          </div>
+          {(selectedIds.length > 0 || exportJob) && (
+            <aside
+              className="workspaceDetail"
+              aria-label="상세와 작업"
+              id="employee-detail"
+              tabIndex={-1}
+            >
+              {detailId && (
+                <header className="employeeDetailHeader">
+                  <h2>사원 상세</h2>
+                  <a className="employeeDetailJump" href="#employee-list">
+                    목록으로
+                  </a>
+                </header>
+              )}
+              {detailId && !currentEmployee && (
+                <p role={currentDetail ? "alert" : "status"}>
+                  {currentDetail
+                    ? "사원 상세를 불러오지 못했습니다."
+                    : "사원 상세를 불러오는 중입니다."}
+                </p>
+              )}
+              {currentEmployee && (
+                <>
+                  <div className="detailCard">
+                    <div className="employeeIdentity">
+                      <strong>{currentEmployee.name}</strong>
+                      <EmployeeStatusBadge status={currentEmployee.status} />
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>사번</dt>
+                        <dd>{currentEmployee.employeeNo}</dd>
+                      </div>
+                      <div>
+                        <dt>조직</dt>
+                        <dd>{currentEmployee.orgName}</dd>
+                      </div>
+                      <div>
+                        <dt>직책</dt>
+                        <dd>{currentEmployee.position || "미지정"}</dd>
+                      </div>
+                      <div>
+                        <dt>입사일</dt>
+                        <dd>{currentEmployee.hireDate}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <section>
+                    <h3>첨부</h3>
+                    {me.permissions.includes("file.upload") && (
+                      <>
+                        <input
+                          ref={fileInput}
+                          type="file"
+                          accept=".png,.pdf,image/png,application/pdf"
+                          aria-label="첨부할 PNG 또는 PDF 파일"
+                        />
+                        <button
+                          onClick={() => void uploadFile()}
+                          disabled={fileBusy}
+                        >
+                          첨부 업로드
+                        </button>
+                      </>
+                    )}
+                    <ul>
+                      {currentDetail.files.map((file) => (
+                        <li key={file.id}>
+                          <span>{file.originalName}</span>
+                          <small>
+                            {file.state === "AVAILABLE"
+                              ? file.scanStatus === "WAIVED"
+                                ? "테스트 파일 검사 면제"
+                                : "검사 완료, 다운로드 가능"
+                              : file.state === "QUARANTINED"
+                                ? "검사 대기, 격리"
+                                : "삭제 중"}
+                          </small>
+                          {me.permissions.includes("file.download") &&
+                            file.state === "AVAILABLE" && (
+                              <a href={`/api/files/${file.id}/content`}>
+                                다운로드
+                              </a>
+                            )}
+                          {me.permissions.includes("file.delete") && (
+                            <button onClick={() => void deleteFile(file.id)}>
+                              삭제
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                </>
+              )}
+              {(exportJob || (canExport && selectedIds.length > 0)) && (
+                <section>
+                  <h3>출력 작업</h3>
+                  {canExport && selectedIds.length > 0 && (
+                    <div className="selectedExport">
+                      <span>선택 {selectedIds.length}건</span>
+                      <ExportActions
+                        selected
+                        onRequest={(format) => void exportData(format, true)}
+                        disabled={busy || exportBusy}
+                        pending={
+                          exportPending?.selected ? exportPending.format : null
+                        }
+                      />
+                    </div>
+                  )}
+                  {exportJob && (
+                    <ExportResult
+                      {...exportJob}
+                      downloadHref={`/api/exports/${exportJob.jobId}/content`}
+                    />
+                  )}
+                </section>
+              )}
+            </aside>
           )}
         </div>
       </section>
-      {(selectedIds.length > 0 || exportJob) && (
-        <aside className="workspaceDetail" aria-label="상세와 작업">
-          {selectedRow && selectedRow.id === detailId && (
-            <>
-              <h2>사원 상세</h2>
-              <div className="detailCard">
-                <strong>{selectedRow.name}</strong>
-                <span>
-                  {selectedRow.employeeNo} / {selectedRow.orgName}
-                </span>
-                <span>입사일 {selectedRow.hireDate}</span>
-              </div>
-              <section>
-                <h3>첨부</h3>
-                {me.permissions.includes("file.upload") && (
-                  <>
-                    <input
-                      ref={fileInput}
-                      type="file"
-                      accept=".png,.pdf,image/png,application/pdf"
-                      aria-label="첨부할 PNG 또는 PDF 파일"
-                    />
-                    <button
-                      onClick={() => void uploadFile()}
-                      disabled={fileBusy}
-                    >
-                      첨부 업로드
-                    </button>
-                  </>
-                )}
-                <ul>
-                  {files.map((file) => (
-                    <li key={file.id}>
-                      <span>{file.originalName}</span>
-                      <small>
-                        {file.state === "AVAILABLE"
-                          ? file.scanStatus === "WAIVED"
-                            ? "테스트 파일 검사 면제"
-                            : "검사 완료, 다운로드 가능"
-                          : file.state === "QUARANTINED"
-                            ? "검사 대기, 격리"
-                            : "삭제 중"}
-                      </small>
-                      {me.permissions.includes("file.download") &&
-                        file.state === "AVAILABLE" && (
-                          <a href={`/api/files/${file.id}/content`}>다운로드</a>
-                        )}
-                      {me.permissions.includes("file.delete") && (
-                        <button onClick={() => void deleteFile(file.id)}>
-                          삭제
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            </>
-          )}
-          <section>
-            <h3>출력 작업</h3>
-            {canExport && selectedIds.length > 0 && (
-              <div className="selectedExport">
-                <span>선택 {selectedIds.length}건</span>
-                <ExportActions
-                  selected
-                  onRequest={(format) => void exportData(format, true)}
-                  disabled={busy || exportBusy}
-                  pending={
-                    exportPending?.selected ? exportPending.format : null
-                  }
-                />
-              </div>
-            )}
-            {exportJob ? (
-              <ExportResult
-                {...exportJob}
-                downloadHref={`/api/exports/${exportJob.jobId}/content`}
-              />
-            ) : (
-              <p>Excel 또는 PDF를 요청하면 작업 상태가 표시됩니다.</p>
-            )}
-          </section>
-        </aside>
-      )}
       <DirtyDialog
         open={Boolean(leaveAction)}
         count={changes.length}

@@ -1,0 +1,142 @@
+.employeeWorkspace .workspaceFilters {
+  display: grid;
+  grid-template-columns:
+    auto minmax(8rem, 1fr) minmax(10rem, 1.3fr) minmax(9rem, 1fr)
+    minmax(7rem, 0.8fr) auto;
+  align-items: end;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+}
+
+.employeeWorkspace .workspaceFilters h2 {
+  align-self: center;
+  padding-inline-end: var(--space-2);
+}
+
+.employeeWorkspace .workspaceFilters label {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.employeeWorkspace .workspaceFilters :is(input, select) {
+  width: 100%;
+  min-width: 0;
+}
+
+.employeeWorkspace .workspaceFilters h2,
+.employeeListHeader h2,
+.employeeDetailHeader h2 {
+  font-size: var(--font-size-lg);
+}
+
+.employeeResults {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  margin-top: var(--space-4);
+}
+
+.employeeList {
+  min-width: 0;
+}
+
+.employeeListHeader,
+.employeeDetailHeader,
+.employeeIdentity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.employeeListHeader {
+  padding: var(--space-3) var(--space-4);
+}
+
+.employeeListHeader .resultCount {
+  margin: 0;
+}
+
+.employeeSelection {
+  margin-inline-start: auto;
+  font-weight: 600;
+  color: var(--color-link);
+}
+
+.employeeApplied {
+  padding: 0 var(--space-4) var(--space-3);
+  color: var(--color-text-on-subtle);
+  overflow-wrap: anywhere;
+}
+
+.employeeResults .workspaceToolbar > span:last-child {
+  margin-inline-start: auto;
+}
+
+.employeeDetailHeader {
+  justify-content: space-between;
+}
+
+.employeeIdentity strong {
+  overflow-wrap: anywhere;
+}
+
+.detailCard dl {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+}
+
+.detailCard dl > div {
+  display: grid;
+  grid-template-columns: 4em minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.detailCard dt {
+  color: var(--color-text-muted);
+}
+
+.detailCard dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.employeeDetailJump {
+  color: var(--color-link);
+  text-underline-offset: 0.2em;
+}
+
+@media (min-width: 1081px) {
+  .employeeWorkspace .workspaceFilters label {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .employeeResults:has(> .workspaceDetail) {
+    grid-template-columns: minmax(0, 1fr) clamp(260px, 22vw, 320px);
+  }
+  .employeeDetailJump {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .employeeWorkspace .workspaceFilters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2) var(--space-3);
+  }
+  .employeeWorkspace .workspaceFilters > button {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+  .employeeListHeader .employeeDetailJump {
+    overflow-wrap: anywhere;
+  }
+}

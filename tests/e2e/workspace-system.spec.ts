@@ -164,9 +164,23 @@ test("detail actions follow the current employee while a new detail loads", asyn
   try {
     await checkbox("E001").click();
     await expect(upload).toHaveCount(0);
+    await expect(
+      page.getByText("사원 상세를 불러오는 중입니다."),
+    ).toBeVisible();
   } finally {
     release();
   }
   await expect(page.locator(".detailCard")).toContainText("E002");
   await expect(upload).toBeVisible();
+  await page.route(/\/api\/employees\/[^/]+$/, (route) =>
+    route.fulfill({ status: 503, json: {} }),
+  );
+  await checkbox("E001").click();
+  await checkbox("E002").click();
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "사원 상세를 불러오지 못했습니다." }),
+  ).toBeVisible();
+  await expect(upload).toHaveCount(0);
 });

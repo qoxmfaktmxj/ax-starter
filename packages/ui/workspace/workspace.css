@@ -13,9 +13,6 @@ body:has(.workspaceShell) {
   color: var(--color-text);
   font: 14px/1.5 var(--font-sans);
 }
-.workspaceShell:has(.workspaceDetail) {
-  grid-template-columns: 66px minmax(0, 1fr) 280px;
-}
 .workspaceRail {
   grid-column: 1;
   grid-row: 1 / 3;
@@ -73,30 +70,10 @@ body:has(.workspaceShell) {
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
 }
-.workspaceSearch {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  flex: 1;
-  color: var(--color-text-muted);
-}
-.workspaceSearch input {
-  width: min(100%, 400px);
-  min-width: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--color-text);
-  padding: 8px 4px;
-  font: inherit;
-}
-.workspaceSearch svg,
 .workspaceProfile svg,
 .workspaceActions svg {
   flex: none;
 }
-.workspaceSearch input::placeholder,
 .workspaceFilters input::placeholder {
   color: var(--color-text-muted);
 }
@@ -269,10 +246,6 @@ body:has(.workspaceShell) {
   padding: 10px 20px;
   font-size: 13px;
 }
-.appliedFilters {
-  margin-left: auto;
-  color: var(--color-text-muted);
-}
 .dirtyCount {
   color: var(--color-link);
   font-weight: 650;
@@ -343,7 +316,6 @@ body:has(.workspaceShell) {
 }
 .workspaceDetail {
   min-width: 0;
-  margin: 28px var(--work-gap) 16px 0;
   padding: 20px;
 }
 .workspaceDetail h2 {
@@ -374,8 +346,7 @@ body:has(.workspaceShell) {
   font-size: 22px;
 }
 .workspaceDetail p,
-.workspaceDetail small,
-.detailCard span {
+.workspaceDetail small {
   font-size: 13px;
   color: var(--color-text-muted);
   overflow-wrap: anywhere;
@@ -484,20 +455,12 @@ body:has(.workspaceShell) {
   padding: 24px;
 }
 @media (max-width: 1080px) {
-  .workspaceShell:has(.workspaceDetail) {
-    grid-template-columns: 66px minmax(0, 1fr);
-  }
-  .workspaceDetail {
-    grid-column: 2;
-    margin: 0 var(--work-gap) 16px;
-  }
   .workspaceRail {
     grid-row: 1 / 4;
   }
 }
 @media (max-width: 660px) {
-  .workspaceShell,
-  .workspaceShell:has(.workspaceDetail) {
+  .workspaceShell {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto 1fr;
   }
@@ -533,8 +496,7 @@ body:has(.workspaceShell) {
     margin: 0 0 0 auto;
   }
   .workspaceTopbar,
-  .workspaceMain,
-  .workspaceDetail {
+  .workspaceMain {
     grid-column: 1;
   }
   .workspaceTopbar {
@@ -587,9 +549,6 @@ body:has(.workspaceShell) {
   }
   .workspaceMain .workspaceGridGuide {
     padding-inline: 12px;
-  }
-  .workspaceDetail {
-    margin-inline: var(--work-gap);
   }
 }
 .workspaceRail nav button span,
@@ -653,9 +612,6 @@ body:has(.workspaceShell) {
 .workspaceShell[data-menu="top"]
   :is(.workspaceTopbar, .workspaceMain, .workspaceDetail) {
   grid-column: 1;
-}
-.workspaceShell[data-menu="top"] .workspaceDetail {
-  margin: 0 var(--work-gap) 16px;
 }
 .workGridLayout {
   display: grid;

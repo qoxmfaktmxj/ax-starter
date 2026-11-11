@@ -599,3 +599,14 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - 전용 PostgreSQL/OIDC에서 `pnpm migrate`, `pnpm seed` 성공. 테스트 파일 두 개의 포맷을 정리한 뒤 최종 `pnpm check` 통과, 아키텍처 70개 소스. `pnpm test` 단위 41개 통과. 호스트 test 프로필 `pnpm build` 성공. [빌드 로그](../output/catalog-polish/build.log)
 - `pnpm exec playwright test --config output/catalog-polish/host.config.ts workspace-system text-field status-badge appearance` 관련 브라우저 테스트 14개 통과. Enter/Space로 항목을 바꾸고 돌아왔을 때 사번 입력값 유지, 네 테마에서 선택 항목의 글자 대비 4.5:1 이상과 기존 예시 동작을 검증했다. `node output/catalog-polish/capture.mjs after`로 모바일 가로 넘침 없음과 최종 화면을 확인했다. [검사 로그](../output/catalog-polish/e2e-final.log)
 - 전용 프로젝트 라벨 확인 후 `docker compose -p ax-catalog-polish-261111 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 컨테이너 2개, 네트워크, 테스트 DB 볼륨을 제거했다.
+
+## 2026-11-11 사원관리 검색, 목록, 상세 배치
+
+성공 기준은 코발트/ISU와 라이트/다크, 기본/촘촘하게의 8개 조합에서 검색 조건을 함께 제출하고 조회 결과와 현재 선택한 사원 상세를 대조할 수 있는 것이다. 좁은 화면에서는 선택한 사원과 목록 사이를 키보드로 이동할 수 있어야 한다.
+
+- Astryx의 필터형 표와 MetadataList 지침, unslop의 간격과 문구 기준으로 실제 사원 선택 화면을 검토했다. 기존 390px 화면에서 상세 이름은 화면 상단 기준 879px 지점에 있었다. 사번/이름/조직/상태를 같은 폼으로 옮기고, 목록 머리에 조회 건수와 선택 건수, 제출한 조건을 배치했다. 현재 선택 ID에 맞는 상세와 첨부 파일을 함께 표시하고 조회 실패나 대기는 해당 위치에 안내한다. [화면 기준](../DESIGN.md#조회-편집-다운로드)
+- `node output/employee-polish/capture.mjs before`와 `node output/employee-polish/capture.mjs after`로 실제 E001을 선택하고 넓은 화면의 목록/상세 시작선과 모바일의 상세 링크를 확인했다. [개선 전](../output/employee-polish/before-desktop.png), [개선 후](../output/employee-polish/after-desktop.png), [다크 촘촘하게](../output/employee-polish/after-dark-compact.png), [모바일](../output/employee-polish/after-mobile.png)
+- 전용 PostgreSQL/OIDC에서 `pnpm migrate`, `pnpm seed` 성공. 페이지 CSS의 포맷을 정리한 뒤 최종 `pnpm check` 통과, 경계 검사 70개 소스. `pnpm test` 단위 41개 통과, test 프로필 호스트 `pnpm build` 성공. [빌드 로그](../output/employee-polish/build.log)
+- `pnpm exec playwright test --config output/employee-polish/host.config.ts` 전체 55개 중 54개가 통과했다. 컴포넌트 카탈로그 저장 버튼 검사는 로그인 횟수 제한 안내에서 멈췄고 같은 빌드와 인증 설정으로 해당 검사를 재실행해 통과했다. [전체 로그](../output/employee-polish/e2e.log), [재실행 로그](../output/employee-polish/retry.log)
+- 네 테마와 두 밀도에서 조직 담당자의 실제 사번/이름/조직/재직 조건 제출, 적용 전후 조건 구분, 조회 11건에서 1건으로 축소, E001에서 E002로 상세 교체, 급여 열 권한, 데스크톱 목록과 상세 정렬을 확인했다. 320px에서 상세/목록 링크의 키보드 이동과 가로 넘침을 확인했다. 지연 응답과 HTTP 503에서는 이전 사원의 첨부 작업이 표시되지 않았다. 1440x900 조회형에서 완전히 보이는 행은 기본 9행, 촘촘하게 15행이었다.
+- 작업 전용 프로젝트 라벨을 확인한 뒤 `docker compose -p ax-employee-polish-261111 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 컨테이너 2개, 네트워크와 테스트 DB 볼륨을 제거했다.
