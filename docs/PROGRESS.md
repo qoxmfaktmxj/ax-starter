@@ -621,3 +621,13 @@ DataGrid가 범위와 클립보드 이벤트를 처리하고 사원 화면이 �
 - `pnpm exec playwright test --config output/workflow-templates/host.config.ts workflow-templates workspace-system appearance status-badge text-field` 관련 브라우저 테스트 16개 통과. 8개 테마/밀도 조합에서 기존 그리드와 상세 탭의 기준 행 변경, 팝업 검색 0건/선택 적용/Escape 취소, 변경 항목 필터를 확인했다. 320px에서 대화상자 폭, Tab 포커스 유지, 닫은 뒤 실행 버튼 복원도 검증했다. [검사 로그](../output/workflow-templates/final-e2e.log)
 - `node output/workflow-templates/capture.mjs`로 최종 [상세 탭](../output/workflow-templates/course-tabs.png), [변경 비교](../output/workflow-templates/comparison.png), [모바일 팝업](../output/workflow-templates/mobile-picker.png)을 캡처했다.
 - 전용 프로젝트 라벨을 확인한 뒤 `docker compose -p ax-templates-261111 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 컨테이너 2개, 네트워크, 테스트 DB 볼륨을 정리했다.
+
+## 2026-11-11 공통 신청서의 교육 신청 작성/검토 예시
+
+성공 기준은 과정 선택과 신청 사유 입력 후 검토와 수정을 반복해도 선택값과 여러 줄 사유가 유지되며, 네 테마 각각 1440px/320px에서 키보드로 완료할 수 있는 것이다.
+
+- 디자인 시스템의 화면 템플릿에 ‘교육 신청서’를 추가했다. 기존 과정 선택 팝업을 재사용한다. 브라우저 초안에서 필수값과 공백을 검사하고, 단계 전환 시 작성/검토 제목에 포커스를 준다. 신청자와 교육 과정은 가상 데이터다. [작성](../output/request-form-261111/write.png), [검토](../output/request-form-261111/review.png), [모바일 검토](../output/request-form-261111/mobile-review.png)
+- [신청서 설계안](superpowers/specs/2026-11-11-request-form.md)에 실제 교육 신청의 결재선 필요와 정책 미결정 항목을 반영했다. [실행 계획](superpowers/plans/2026-11-11-request-form.md)에 계정/사원/조직 책임자 연결부터 결재함, 구매요청으로 이어지는 확장 순서를 제안했다. Hallmark의 업무 화면 기준과 SaaSFrame의 Remote 신청/승인 사례, Frappe HR 부서 설정, ERPNext 입고 문서를 확인했다.
+- 검증 전용 PostgreSQL/OIDC에서 `pnpm migrate`, `pnpm seed` 성공. test 프로필 호스트 `pnpm build` 성공. `pnpm check` 통과, 경계 검사 71개 소스. `pnpm test` 단위 41개 통과. [빌드 로그](../output/request-form-261111/build.log)
+- `pnpm exec playwright test --config output/request-form-261111/host.config.ts request-form workflow-templates workspace-system` 최종 관련 E2E 8개 통과. 교육 신청서는 네 테마 각각 1440px/320px에서 검증했다. 필수값 누락/공백, 과정 선택 적용/취소, 검토 후 원래 값과 줄바꿈 복원, 과정과 사유를 바꾼 두 번째 검토/수정, 키보드 포커스와 가로 넘침을 확인했다. [최종 브라우저 로그](../output/request-form-261111/browser-final.log)
+- 프로젝트 라벨을 확인하고 `docker compose -p ax-request-form-261111 -f compose.yaml -f <임시 포트 설정> --profile test down --volumes --remove-orphans`로 전용 컨테이너 2개, 네트워크, 테스트 DB 볼륨을 제거했다.

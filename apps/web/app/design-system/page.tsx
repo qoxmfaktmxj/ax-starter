@@ -2,7 +2,11 @@
 import { useCallback, useState } from "react";
 import { Tabs } from "@base-ui/react/tabs";
 import { ComponentCatalog } from "./ComponentCatalog";
-import { ChangeReviewExample, CoursePickerExample } from "./WorkflowExamples";
+import {
+  ChangeReviewExample,
+  CoursePickerExample,
+  EducationRequestExample,
+} from "./WorkflowExamples";
 import { authClient } from "../../auth-client";
 import {
   DataGrid,
@@ -256,7 +260,13 @@ export default function DesignSystemPage() {
   const [section, setSection] = useState("templates");
   const [count, setCount] = useState(1);
   const [view, setView] = useState<
-    "grids" | "permissions" | "settings" | "tabs" | "picker" | "compare"
+    | "grids"
+    | "permissions"
+    | "settings"
+    | "tabs"
+    | "picker"
+    | "compare"
+    | "request"
   >("grids");
   const [draft, setDraft] = useState("");
   const [rows, setRows] = useState(courses);
@@ -404,6 +414,7 @@ export default function DesignSystemPage() {
                   ["settings", "입력 폼"],
                   ["picker", "선택 팝업"],
                   ["compare", "변경 비교"],
+                  ["request", "교육 신청서"],
                   ["permissions", "내 권한"],
                 ] as const
               ).map(([value, label]) => (
@@ -431,6 +442,8 @@ export default function DesignSystemPage() {
             <CoursePickerExample courses={courses} />
           ) : view === "compare" ? (
             <ChangeReviewExample />
+          ) : view === "request" ? (
+            <EducationRequestExample courses={courses} />
           ) : view === "permissions" ? (
             <PermissionSummary me={me} />
           ) : (
