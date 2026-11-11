@@ -12,6 +12,7 @@ import {
   varchar,
   date,
   bigint,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 export const organizations = pgTable("organizations", {
@@ -19,6 +20,9 @@ export const organizations = pgTable("organizations", {
   code: varchar("code", { length: 20 }).notNull().unique(),
   name: varchar("name", { length: 120 }).notNull(),
   parentId: uuid("parent_id"),
+  managerEmployeeId: uuid("manager_employee_id").references(
+    (): AnyPgColumn => employees.id,
+  ),
   rowVersion: integer("row_version").notNull().default(1),
 });
 
@@ -28,15 +32,17 @@ export const appUsers = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     issuer: text("issuer").notNull(),
     subject: text("subject").notNull(),
-    employeeId: uuid("employee_id"),
+    employeeId: uuid("employee_id").references((): AnyPgColumn => employees.id),
     orgId: uuid("org_id").references(() => organizations.id),
     active: integer("active").notNull().default(1),
     roleCode: varchar("role_code", { length: 30 }).notNull(),
     dataScope: varchar("data_scope", { length: 20 }).notNull(),
     authzVersion: integer("authz_version").notNull().default(1),
+    rowVersion: integer("row_version").notNull().default(1),
   },
   (table) => [
     uniqueIndex("app_users_identity_key").on(table.issuer, table.subject),
+    index("app_users_issuer_employee_idx").on(table.issuer, table.employeeId),
   ],
 );
 

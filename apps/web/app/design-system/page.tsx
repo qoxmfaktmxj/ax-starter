@@ -146,6 +146,7 @@ function CourseDetailTabs({
 }
 
 const permissionNames: Record<Permission, string> = {
+  "org.manage": "인사/조직 기준정보 관리",
   "emp.read": "사원 조회",
   "emp.create": "사원 추가",
   "emp.update": "사원 수정",
@@ -331,6 +332,11 @@ export default function DesignSystemPage() {
               },
             ]
           : []),
+        {
+          label: "인사/조직",
+          icon: "user",
+          onSelect: () => window.location.assign("/organization"),
+        },
         ...(me.permissions.includes("audit.read")
           ? [
               {

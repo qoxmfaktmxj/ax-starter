@@ -329,7 +329,14 @@ describe("employee service PostgreSQL integration", () => {
   });
 
   it("limits SELF to one employee and rejects an unsupported scope", async () => {
-    const selfId = "00000000-0000-4000-8000-000000000001";
+    const selfId = "00000000-0000-4000-8000-000000000003";
+    const [original] = await db
+      .select({
+        employeeId: appUsers.employeeId,
+        dataScope: appUsers.dataScope,
+      })
+      .from(appUsers)
+      .where(eq(appUsers.id, MANAGER_ID));
     await db
       .update(appUsers)
       .set({
@@ -356,8 +363,7 @@ describe("employee service PostgreSQL integration", () => {
       await db
         .update(appUsers)
         .set({
-          dataScope: "ORG",
-          employeeId: null,
+          ...original,
           authzVersion: sql`${appUsers.authzVersion} + 1`,
         })
         .where(eq(appUsers.id, MANAGER_ID));

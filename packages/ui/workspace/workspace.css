@@ -555,6 +555,15 @@ body:has(.workspaceShell) {
 .workspaceBrand span {
   display: none;
 }
+@media (max-width: 380px) {
+  .workspaceShell[data-menu="side"] .workspaceRail {
+    padding-inline: var(--space-2);
+    gap: var(--space-1);
+  }
+  .workspaceShell[data-menu="side"] .workspaceRail nav {
+    gap: var(--space-1);
+  }
+}
 .workspaceEnvironment {
   margin-left: auto;
 }

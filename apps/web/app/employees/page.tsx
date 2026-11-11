@@ -27,6 +27,7 @@ import {
 } from "../../../../packages/grid/DataGrid";
 import { EmployeeStatusBadge } from "../../../../packages/ui/workspace/EmployeeStatusBadge";
 import "./employee-workspace.css";
+import { clientUuid } from "../clientUuid";
 import { DirtyDialog } from "../../../../packages/ui/DirtyDialog";
 import { authClient } from "../../auth-client";
 import {
@@ -62,6 +63,7 @@ type LeaveAction =
   | "browse"
   | "batch-edit"
   | "audit"
+  | "organization"
   | "templates"
   | "logout";
 
@@ -118,16 +120,6 @@ function draftReducer(state: DraftState, action: DraftAction): DraftState {
         ? from.slice(0, -1)
         : [...state.redo.slice(-29), state.rows],
   };
-}
-
-function clientUuid(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = Array.from(bytes, (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 async function jsonPost<T>(
@@ -502,6 +494,7 @@ export default function EmployeesPage() {
       });
       setRefresh((value) => value + 1);
     } else if (action === "audit") window.location.assign("/audit");
+    else if (action === "organization") window.location.assign("/organization");
     else if (action === "templates") window.location.assign("/design-system");
     else if (action === "logout")
       void authClient.signOut().then(() => window.location.assign("/login"));
@@ -878,6 +871,11 @@ export default function EmployeesPage() {
           icon: "people",
           active: true,
           onSelect: () => requestAction("browse"),
+        },
+        {
+          label: "인사/조직",
+          icon: "user",
+          onSelect: () => requestAction("organization"),
         },
         ...(me.permissions.includes("audit.read")
           ? [

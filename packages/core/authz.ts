@@ -19,7 +19,8 @@ export type Permission =
   | "file.upload"
   | "file.download"
   | "file.delete"
-  | "audit.read";
+  | "audit.read"
+  | "org.manage";
 
 export type ExecutionContext = {
   principal:
@@ -49,6 +50,7 @@ const adminPermissions: Permission[] = [
   "file.download",
   "file.delete",
   "audit.read",
+  "org.manage",
 ];
 const managerPermissions: Permission[] = [
   "emp.read",
